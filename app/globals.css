@@ -1,0 +1,94 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f6f1ea;
+  --foreground: #1b1a18;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-body);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body), "Segoe UI", sans-serif;
+}
+
+.font-display {
+  font-family: var(--font-display), "Times New Roman", serif;
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+@layer utilities {
+  .animate-float {
+    animation: float 9s ease-in-out infinite;
+  }
+}
+
+.fc {
+  --fc-border-color: rgba(27, 26, 24, 0.12);
+  --fc-page-bg-color: transparent;
+  --fc-neutral-bg-color: rgba(27, 26, 24, 0.04);
+  --fc-today-bg-color: rgba(224, 122, 95, 0.12);
+  --fc-button-bg-color: #1d4d44;
+  --fc-button-border-color: transparent;
+  --fc-button-hover-bg-color: #163a33;
+  --fc-button-text-color: #ffffff;
+  --fc-event-bg-color: #2f6b5f;
+  --fc-event-border-color: transparent;
+  --fc-event-text-color: #ffffff;
+  font-family: var(--font-body), sans-serif;
+}
+
+.fc .fc-toolbar-title {
+  font-family: var(--font-display), serif;
+  font-size: 1.35rem;
+}
+
+.fc .fc-button {
+  border-radius: 9999px;
+  box-shadow: none;
+  font-weight: 600;
+  padding: 0.3rem 0.85rem;
+}
+
+.fc .fc-button:focus,
+.fc .fc-button-primary:focus {
+  box-shadow: none;
+}
+
+.fc .fc-daygrid-day-number,
+.fc .fc-timegrid-axis-cushion,
+.fc .fc-timegrid-slot-label-cushion {
+  font-size: 0.75rem;
+  color: rgba(27, 26, 24, 0.6);
+}
+
+.fc .fc-col-header-cell-cushion {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: rgba(27, 26, 24, 0.6);
+}
+
+.fc .fc-event {
+  border-radius: 9999px;
+  padding: 0 0.4rem;
+  font-size: 0.75rem;
+}
