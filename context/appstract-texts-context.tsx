@@ -2,13 +2,24 @@
 
 import { createContext, useEffect, useState } from "react";
 
-export const AppstractTextsContext = createContext({
+type AppstractTextsContextValue = {
+  texts: Record<string, string>;
+  getText: (key: string) => string;
+};
+
+export const AppstractTextsContext = createContext<AppstractTextsContextValue>({
   texts: {} as Record<string, string>,
-  getText: (key: string, fallback: string) => fallback,
+  getText: () => "",
 });
 
-export function AppstractTextsProvider({ children }: { children: React.ReactNode }) {
-  const [texts, setTexts] = useState<Record<string, string>>({});
+export function AppstractTextsProvider({
+  children,
+  initialTexts = {},
+}: {
+  children: React.ReactNode;
+  initialTexts?: Record<string, string>;
+}) {
+  const [texts, setTexts] = useState<Record<string, string>>(initialTexts);
 
   useEffect(() => {
     fetch("/api/central-texts")
@@ -21,12 +32,12 @@ export function AppstractTextsProvider({ children }: { children: React.ReactNode
       .catch(() => {});
   }, []);
 
-  const getText = (key: string, fallback: string) => {
+  const getText = (key: string) => {
     const v = texts[key];
     if (typeof v === "string" && v.length > 0) {
       return v;
     }
-    return fallback;
+    return "";
   };
 
   return <AppstractTextsContext.Provider value={{ texts, getText }}>{children}</AppstractTextsContext.Provider>;
