@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Cormorant_Garamond, Sora } from "next/font/google";
 import "./globals.css";
+import { AppstractTextsProvider } from "@/context/appstract-texts-context";
 
 const sora = Sora({
   variable: "--font-body",
@@ -27,7 +28,7 @@ export default function RootLayout({
   return (
     <html lang="es" className="scroll-smooth">
       <body className={`${sora.variable} ${cormorant.variable} antialiased`}>
-        {children}
+        <AppstractTextsProvider>{children}</AppstractTextsProvider>
       </body>
     </html>
   );

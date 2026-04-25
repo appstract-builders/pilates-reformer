@@ -1,50 +1,54 @@
 {
-  "id": "c0a7d0d0-dde9-492d-93ae-1751b7db2c63",
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "edc50c16-84b5-432f-b939-dfec3d9c1abd",
   "prevId": "00000000-0000-0000-0000-000000000000",
-  "version": "7",
-  "dialect": "postgresql",
   "tables": {
-    "public.bookings": {
+    "bookings": {
       "name": "bookings",
-      "schema": "",
       "columns": {
         "id": {
           "name": "id",
-          "type": "uuid",
+          "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "default": "gen_random_uuid()"
+          "autoincrement": false
         },
         "user_id": {
           "name": "user_id",
-          "type": "uuid",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "subscription_id": {
           "name": "subscription_id",
-          "type": "uuid",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "slot_id": {
           "name": "slot_id",
-          "type": "uuid",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "slot_date": {
           "name": "slot_date",
-          "type": "date",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "now()"
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
         }
       },
       "indexes": {},
@@ -91,66 +95,69 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
+      "checkConstraints": {}
     },
-    "public.payments": {
+    "payments": {
       "name": "payments",
-      "schema": "",
       "columns": {
         "id": {
           "name": "id",
-          "type": "uuid",
+          "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "default": "gen_random_uuid()"
+          "autoincrement": false
         },
         "user_id": {
           "name": "user_id",
-          "type": "uuid",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "subscription_id": {
           "name": "subscription_id",
-          "type": "uuid",
+          "type": "text",
           "primaryKey": false,
-          "notNull": false
+          "notNull": false,
+          "autoincrement": false
         },
         "amount_cents": {
           "name": "amount_cents",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "status": {
           "name": "status",
-          "type": "payment_status",
-          "typeSchema": "public",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false,
           "default": "'pending'"
         },
         "external_id": {
           "name": "external_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": false
+          "notNull": false,
+          "autoincrement": false
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "now()"
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "timestamp",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "now()"
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
         }
       },
       "indexes": {},
@@ -184,46 +191,46 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
+      "checkConstraints": {}
     },
-    "public.plan_prices": {
+    "plan_prices": {
       "name": "plan_prices",
-      "schema": "",
       "columns": {
         "id": {
           "name": "id",
-          "type": "uuid",
+          "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "default": "gen_random_uuid()"
+          "autoincrement": false
         },
         "plan_id": {
           "name": "plan_id",
-          "type": "uuid",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "cadence": {
           "name": "cadence",
-          "type": "plan_cadence",
-          "typeSchema": "public",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "amount_cents": {
           "name": "amount_cents",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "now()"
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
         }
       },
       "indexes": {},
@@ -244,243 +251,254 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
+      "checkConstraints": {}
     },
-    "public.plans": {
+    "plans": {
       "name": "plans",
-      "schema": "",
       "columns": {
         "id": {
           "name": "id",
-          "type": "uuid",
+          "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "default": "gen_random_uuid()"
+          "autoincrement": false
         },
         "name": {
           "name": "name",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "days_per_week": {
           "name": "days_per_week",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "description": {
           "name": "description",
           "type": "text",
           "primaryKey": false,
-          "notNull": false
+          "notNull": false,
+          "autoincrement": false
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "now()"
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "timestamp",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "now()"
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
         }
       },
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
+      "checkConstraints": {}
     },
-    "public.schedule_slots": {
+    "schedule_slots": {
       "name": "schedule_slots",
-      "schema": "",
       "columns": {
         "id": {
           "name": "id",
-          "type": "uuid",
+          "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "default": "gen_random_uuid()"
+          "autoincrement": false
         },
         "day_of_week": {
           "name": "day_of_week",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "start_time": {
           "name": "start_time",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "end_time": {
           "name": "end_time",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "capacity": {
           "name": "capacity",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false,
           "default": 1
         },
         "label": {
           "name": "label",
           "type": "text",
           "primaryKey": false,
-          "notNull": false
+          "notNull": false,
+          "autoincrement": false
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "now()"
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "timestamp",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "now()"
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
         }
       },
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
+      "checkConstraints": {}
     },
-    "public.studio_policies": {
+    "studio_policies": {
       "name": "studio_policies",
-      "schema": "",
       "columns": {
         "id": {
           "name": "id",
-          "type": "uuid",
+          "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "default": "gen_random_uuid()"
+          "autoincrement": false
         },
         "key": {
           "name": "key",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "value": {
           "name": "value",
           "type": "text",
           "primaryKey": false,
-          "notNull": false
+          "notNull": false,
+          "autoincrement": false
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "now()"
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "timestamp",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "now()"
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
         }
       },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
+      "indexes": {
         "studio_policies_key_unique": {
           "name": "studio_policies_key_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "key"
-          ]
+          ],
+          "isUnique": true
         }
       },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
     },
-    "public.subscriptions": {
+    "subscriptions": {
       "name": "subscriptions",
-      "schema": "",
       "columns": {
         "id": {
           "name": "id",
-          "type": "uuid",
+          "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "default": "gen_random_uuid()"
+          "autoincrement": false
         },
         "user_id": {
           "name": "user_id",
-          "type": "uuid",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "plan_id": {
           "name": "plan_id",
-          "type": "uuid",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "cadence": {
           "name": "cadence",
-          "type": "plan_cadence",
-          "typeSchema": "public",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "valid_from": {
           "name": "valid_from",
-          "type": "date",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "valid_to": {
           "name": "valid_to",
-          "type": "date",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "active": {
           "name": "active",
-          "type": "boolean",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false,
           "default": true
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "now()"
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "timestamp",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "now()"
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
         }
       },
       "indexes": {},
@@ -514,94 +532,72 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
+      "checkConstraints": {}
     },
-    "public.users": {
+    "users": {
       "name": "users",
-      "schema": "",
       "columns": {
         "id": {
           "name": "id",
-          "type": "uuid",
+          "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "default": "gen_random_uuid()"
+          "autoincrement": false
         },
         "email": {
           "name": "email",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "full_name": {
           "name": "full_name",
           "type": "text",
           "primaryKey": false,
-          "notNull": false
+          "notNull": false,
+          "autoincrement": false
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "now()"
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "timestamp",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "now()"
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
         }
       },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
+      "indexes": {
         "users_email_unique": {
           "name": "users_email_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "email"
-          ]
+          ],
+          "isUnique": true
         }
       },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
     }
   },
-  "enums": {
-    "public.payment_status": {
-      "name": "payment_status",
-      "schema": "public",
-      "values": [
-        "pending",
-        "completed",
-        "failed",
-        "refunded"
-      ]
-    },
-    "public.plan_cadence": {
-      "name": "plan_cadence",
-      "schema": "public",
-      "values": [
-        "semanal",
-        "quincenal",
-        "mensual"
-      ]
-    }
-  },
-  "schemas": {},
-  "sequences": {},
-  "roles": {},
-  "policies": {},
   "views": {},
+  "enums": {},
   "_meta": {
-    "columns": {},
     "schemas": {},
-    "tables": {}
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "indexes": {}
   }
 }

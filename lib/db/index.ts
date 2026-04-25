@@ -1,15 +1,9 @@
-import { drizzle } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
+import Database from "better-sqlite3";
+import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "./schema";
 
-const connectionString =
-  process.env.DATABASE_URL ?? process.env.SUPABASE_DATABASE_URL;
+const sqliteUrl = process.env.DATABASE_URL ?? "file:./local.db";
+const sqlitePath = sqliteUrl.startsWith("file:") ? sqliteUrl.replace("file:", "") : sqliteUrl;
+const client = new Database(sqlitePath);
 
-const pool =
-  connectionString &&
-  new Pool({
-    connectionString,
-    ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : undefined,
-  });
-
-export const db = pool ? drizzle(pool, { schema }) : null;
+export const db = drizzle(client, { schema });

@@ -1,12 +1,12 @@
 {
   "version": "7",
-  "dialect": "postgresql",
+  "dialect": "sqlite",
   "entries": [
     {
       "idx": 0,
-      "version": "7",
-      "when": 1773704655759,
-      "tag": "0000_outgoing_newton_destine",
+      "version": "6",
+      "when": 1777089442392,
+      "tag": "0000_robust_harpoon",
       "breakpoints": true
     }
   ]
