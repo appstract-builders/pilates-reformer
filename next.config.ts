@@ -16,6 +16,11 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       {
         protocol: "https",
+        hostname: "appddata-multimedia-bucket.s3.us-east-1.amazonaws.com",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
         hostname: "studio57.s3.us-east-1.amazonaws.com",
         pathname: "/**",
       },
