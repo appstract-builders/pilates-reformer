@@ -27,6 +27,7 @@ import {
 } from "@/lib/cancellation-policy"
 import {
   type BookingSlotOption,
+  dateRangeForDay,
   localTodayStr,
   resolveBookingDefaultDate,
   toLocalDateStr,
@@ -187,6 +188,37 @@ export async function loadAgendarDataAction(): Promise<AgendarData> {
     bookedBySlotDate,
     individualClassPrice: individualPlan?.priceMxn ?? null,
   }
+}
+
+/**
+ * Reservas confirmadas de una fecha concreta, por horario. Se consulta cada vez
+ * que la alumna cambia de fecha para que el cupo mostrado sea el actual y no el
+ * que se cargó al abrir el modal.
+ */
+export async function loadDayAvailabilityAction(
+  bookingDateStr: string,
+): Promise<Record<string, number>> {
+  const raw = bookingDateStr.trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return {}
+
+  const db = getDb()
+  const { start, end } = dateRangeForDay(raw)
+  const rows = await db
+    .select({ slotId: schema.booking.scheduleSlotId })
+    .from(schema.booking)
+    .where(
+      and(
+        eq(schema.booking.status, "confirmed"),
+        gte(schema.booking.bookingDate, start),
+        lte(schema.booking.bookingDate, end),
+      ),
+    )
+
+  const porSlot: Record<string, number> = {}
+  for (const row of rows) {
+    porSlot[row.slotId] = (porSlot[row.slotId] ?? 0) + 1
+  }
+  return porSlot
 }
 
 export async function loadWeeklyBoardAction() {

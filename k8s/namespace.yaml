@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pilates-reformer
+  labels:
+    project: pilates-reformer
+    managed-by: makefile

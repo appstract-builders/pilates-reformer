@@ -29,6 +29,7 @@ import {
   checkPublicBookingEligibility,
   createPublicBookingAction,
   loadAgendarDataAction,
+  loadDayAvailabilityAction,
   type AgendarData,
   type PublicBookingState,
 } from "@/app/agendar/actions"
@@ -98,8 +99,9 @@ function AgendarBookingForm(props: {
   } | null>(null)
   const [trialAvailable, setTrialAvailable] = useState(false)
   const [useTrialClass, setUseTrialClass] = useState(false)
-  // Reservas hechas en esta sesión: el cupo baja sin recargar la página.
-  const [extraBooked, setExtraBooked] = useState<Record<string, number>>({})
+  // Cupo real de la fecha elegida; se recarga al cambiarla y tras reservar.
+  const [dayBooked, setDayBooked] = useState<Record<string, number> | null>(null)
+  const [loadingDay, setLoadingDay] = useState(false)
   const { onBooked } = props
 
   const dayOfWeek = getDayOfWeekFromDateStr(bookingDate)
@@ -108,8 +110,10 @@ function AgendarBookingForm(props: {
     bookingDate,
     props.disabledSlotDateKeys,
   ).map((slot) => {
-    const key = `${slot.id}|${bookingDate}`
-    const booked = (props.bookedBySlotDate[key] ?? 0) + (extraBooked[key] ?? 0)
+    const booked =
+      dayBooked != null
+        ? (dayBooked[slot.id] ?? 0)
+        : (props.bookedBySlotDate[`${slot.id}|${bookingDate}`] ?? 0)
     return { ...slot, booked, free: Math.max(0, slot.capacity - booked) }
   })
   const nextDate = nextDateWithSlots(bookingDate, props.slots, props.disabledSlotDateKeys)
@@ -134,6 +138,26 @@ function AgendarBookingForm(props: {
       : null
 
   useEffect(() => {
+    if (bookingDate === "") {
+      setDayBooked(null)
+      return
+    }
+    let cancelled = false
+    setLoadingDay(true)
+    setDayBooked(null)
+    loadDayAvailabilityAction(bookingDate)
+      .then((porSlot) => {
+        if (!cancelled) setDayBooked(porSlot)
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingDay(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [bookingDate])
+
+  useEffect(() => {
     if (!scheduleSlotId) return
     const valid = slotsForDay.some((s) => s.id === scheduleSlotId && s.free > 0)
     if (!valid) {
@@ -153,8 +177,7 @@ function AgendarBookingForm(props: {
         slotId: scheduleSlotId,
         userName: confirmedName,
       })
-      const key = `${scheduleSlotId}|${confirmedDate}`
-      setExtraBooked((prev) => (prev[key] != null ? prev : { ...prev, [key]: 1 }))
+      void loadDayAvailabilityAction(confirmedDate).then(setDayBooked)
       onBooked?.()
     }
     if (state.error) {
@@ -313,24 +336,34 @@ function AgendarBookingForm(props: {
               ) : null}
             </div>
           ) : (
-            <select
-              id="scheduleSlotId"
-              name="scheduleSlotId"
-              value={scheduleSlotId}
-              onChange={(e) => setScheduleSlotId(e.target.value)}
-              required
-              className="flex h-10 w-full rounded-inner border border-black/10 bg-white px-3 py-2 text-sm"
-            >
-              <option value="">Elige clase y hora</option>
-              {slotsForDay.map((slot) => (
-                <option key={slot.id} value={slot.id} disabled={slot.free <= 0}>
-                  {formatSlotLabel(slot)}
-                  {slot.free <= 0
-                    ? " — Llena"
-                    : ` — ${slot.free} ${slot.free === 1 ? "lugar" : "lugares"}`}
+            <div className="space-y-1">
+              <select
+                id="scheduleSlotId"
+                name="scheduleSlotId"
+                value={scheduleSlotId}
+                onChange={(e) => setScheduleSlotId(e.target.value)}
+                required
+                disabled={loadingDay}
+                className="flex h-10 w-full rounded-inner border border-black/10 bg-white px-3 py-2 text-sm disabled:opacity-60"
+              >
+                <option value="">
+                  {loadingDay ? "Consultando lugares…" : "Elige clase y hora"}
                 </option>
-              ))}
-            </select>
+                {loadingDay
+                  ? null
+                  : slotsForDay.map((slot) => (
+                      <option key={slot.id} value={slot.id} disabled={slot.free <= 0}>
+                        {formatSlotLabel(slot)}
+                        {slot.free <= 0
+                          ? " — Llena"
+                          : ` — ${slot.free} ${slot.free === 1 ? "lugar" : "lugares"}`}
+                      </option>
+                    ))}
+              </select>
+              {loadingDay ? (
+                <p className="text-xs text-black/50">Revisando el cupo de esa fecha…</p>
+              ) : null}
+            </div>
           )}
         </div>
         {isCurrentBookingConfirmed ? (

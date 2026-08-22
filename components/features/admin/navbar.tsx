@@ -27,9 +27,11 @@ import { DbActionFeedbackBadge } from "@/components/features/admin/db-action-fee
 export function Navbar({
   userName,
   userEmail,
+  role,
 }: {
   userName: string
   userEmail: string
+  role: string
 }) {
   const pathname = usePathname()
   const segments = pathname.split("/").filter(Boolean)
@@ -100,12 +102,15 @@ export function Navbar({
             </div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem asChild>
-            <Link href={routes.cuenta} className="cursor-pointer">
-              <UserRound className="mr-2 h-4 w-4" />
-              Ver cuenta
-            </Link>
-          </DropdownMenuItem>
+          {/* "Ver cuenta" apunta al dashboard, que sólo admin y root pueden abrir. */}
+          {role === "admin" || role === "root" ? (
+            <DropdownMenuItem asChild>
+              <Link href={routes.cuenta} className="cursor-pointer">
+                <UserRound className="mr-2 h-4 w-4" />
+                Ver cuenta
+              </Link>
+            </DropdownMenuItem>
+          ) : null}
           <DropdownMenuItem
             className="text-destructive focus:text-destructive cursor-pointer"
             disabled={signingOut}

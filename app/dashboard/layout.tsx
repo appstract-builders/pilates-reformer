@@ -120,7 +120,7 @@ export default async function DashboardLayout({
         />
         <DashboardProviders>
           <SidebarInset className="min-w-0">
-            <Navbar userName={navName} userEmail={navEmail} />
+            <Navbar userName={navName} userEmail={navEmail} role={role} />
             <main className="flex-1 overflow-auto min-w-0">
               {noNavAccess ? <NoAccessPanel /> : children}
             </main>
