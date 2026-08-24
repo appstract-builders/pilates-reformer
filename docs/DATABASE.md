@@ -13,9 +13,8 @@ Servidor DataGrip / JDBC:
 
 ### 1. Configurar `.env.local`
 
-Copia `.env.example` a `.env.local` y sustituye `TU_PASSWORD_AQUI` por la contraseña real de `postgres` en las tres variables:
+Copia `.env.example` a `.env.local` y sustituye `TU_PASSWORD_AQUI` por la contraseña real de `postgres` en las dos variables:
 
-- `POSTGRES_PASSWORD`
 - `DATABASE_URL`
 - `DATABASE_URL_UNPOOLED`
 

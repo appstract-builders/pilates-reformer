@@ -149,7 +149,7 @@ export async function sendPasswordResetEmail(params: {
   const resetUrl = buildPasswordResetUrl(params.token)
 
   if (!isEmailConfigured()) {
-    console.warn("[password-reset] Falta RESEND_API_KEY; enlace no enviado:", resetUrl)
+    console.warn("[password-reset] Falta configurar SMTP; enlace no enviado:", resetUrl)
     return
   }
 

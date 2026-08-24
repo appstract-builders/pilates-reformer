@@ -2,7 +2,7 @@ import type { NextConfig } from "next"
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  serverExternalPackages: ["better-sqlite3", "@neondatabase/serverless", "postgres"],
+  serverExternalPackages: ["better-sqlite3", "@neondatabase/serverless", "postgres", "nodemailer"],
   // Next arrastra sharp y sus binarios de plataforma (@img) por si hay que
   // optimizar imagenes. Con unoptimized nadie los carga, y son ~18 MB del
   // bundle standalone: fuera de la imagen.

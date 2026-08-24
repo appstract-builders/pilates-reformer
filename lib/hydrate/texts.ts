@@ -3,6 +3,8 @@ import "server-only"
 import { eq } from "drizzle-orm"
 import { getDb } from "@/lib/db"
 import { hydrate } from "@/lib/db/schema"
+import { hydrate as hydratePg } from "@/lib/db/schema.pg"
+import { getHydrateDb } from "./db"
 import fallbackContent from "./fallback.pilates-reformer.json"
 import type { TextResources } from "./types"
 
@@ -42,7 +44,13 @@ export async function getHydratedResources(): Promise<TextResources> {
   if (cache && now - cachedAt < CACHE_TTL_MS) return cache
   let databaseRows: Array<{ contentKey: string; contentValue: string }> = []
   try {
-    databaseRows = await getDb().select({ contentKey: hydrate.contentKey, contentValue: hydrate.contentValue }).from(hydrate).where(eq(hydrate.projectSlug, PROJECT_SLUG))
+    // `hydrate` vive en la base de appddata, no en la propia. Con
+    // APPSTRACT_DATABASE_URL se lee de alla; sin ella -desarrollo local- se
+    // sigue leyendo el SQLite de la app, que si trae la tabla.
+    const hydrateDb = getHydrateDb()
+    databaseRows = hydrateDb
+      ? await hydrateDb.select({ contentKey: hydratePg.contentKey, contentValue: hydratePg.contentValue }).from(hydratePg).where(eq(hydratePg.projectSlug, PROJECT_SLUG))
+      : await getDb().select({ contentKey: hydrate.contentKey, contentValue: hydrate.contentValue }).from(hydrate).where(eq(hydrate.projectSlug, PROJECT_SLUG))
   } catch (error) {
     console.info("Textos de hydrate no disponibles; se usará el fallback local.", error)
   }
