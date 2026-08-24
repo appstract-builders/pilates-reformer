@@ -67,6 +67,9 @@ export const account = pgTable(
     id: text("id").primaryKey(),
     accountId: text("account_id").notNull(),
     providerId: text("provider_id").notNull(),
+    // better-auth >= 1.5 identifica la cuenta por (issuer, account_id); para
+    // email/contraseña el valor es createLocalAccountIssuer("credential").
+    issuer: text("issuer").notNull(),
     userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
     accessToken: text("access_token"),
     refreshToken: text("refresh_token"),
@@ -78,7 +81,10 @@ export const account = pgTable(
     createdAt: timestamp("created_at", { precision: 3, mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { precision: 3, mode: "date" }).notNull().defaultNow(),
   },
-  (t) => [index("account_userId_idx").on(t.userId)],
+  (t) => [
+    index("account_userId_idx").on(t.userId),
+    uniqueIndex("account_issuer_account_id_uidx").on(t.issuer, t.accountId),
+  ],
 )
 
 export const verification = pgTable(

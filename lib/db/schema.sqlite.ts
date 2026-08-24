@@ -60,6 +60,9 @@ export const account = sqliteTable(
     id: text("id").primaryKey(),
     accountId: text("account_id").notNull(),
     providerId: text("provider_id").notNull(),
+    // better-auth >= 1.5 identifica la cuenta por (issuer, account_id); para
+    // email/contraseña el valor es createLocalAccountIssuer("credential").
+    issuer: text("issuer").notNull(),
     userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
     accessToken: text("access_token"),
     refreshToken: text("refresh_token"),
@@ -72,7 +75,10 @@ export const account = sqliteTable(
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull()
       .$defaultFn(() => new Date()).$onUpdate(() => new Date()),
   },
-  (t) => [index("account_userId_idx").on(t.userId)],
+  (t) => [
+    index("account_userId_idx").on(t.userId),
+    uniqueIndex("account_issuer_account_id_uidx").on(t.issuer, t.accountId),
+  ],
 )
 
 export const verification = sqliteTable(

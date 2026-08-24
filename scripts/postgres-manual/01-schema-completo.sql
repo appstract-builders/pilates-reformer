@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS "account" (
 	"id" text PRIMARY KEY NOT NULL,
 	"account_id" text NOT NULL,
 	"provider_id" text NOT NULL,
+	"issuer" text NOT NULL,
 	"user_id" text NOT NULL,
 	"access_token" text,
 	"refresh_token" text,
@@ -358,6 +359,7 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 CREATE INDEX IF NOT EXISTS "account_userId_idx" ON "account" USING btree ("user_id");
+CREATE UNIQUE INDEX IF NOT EXISTS "account_issuer_account_id_uidx" ON "account" USING btree ("issuer","account_id");
 CREATE INDEX IF NOT EXISTS "booking_userId_idx" ON "booking" USING btree ("user_id");
 CREATE INDEX IF NOT EXISTS "booking_date_idx" ON "booking" USING btree ("booking_date");
 CREATE INDEX IF NOT EXISTS "payment_userId_idx" ON "payment" USING btree ("user_id");
