@@ -1,6 +1,22 @@
 import { relations } from "drizzle-orm"
 import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core"
 
+export const hydrate = sqliteTable(
+  "hydrate",
+  {
+    id: text("id").primaryKey(),
+    projectSlug: text("project_slug").notNull(),
+    contentKey: text("content_key").notNull(),
+    contentValue: text("content_value").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()).$onUpdate(() => new Date()),
+  },
+  (t) => [
+    index("hydrate_project_slug_idx").on(t.projectSlug),
+    uniqueIndex("hydrate_project_slug_content_key_uidx").on(t.projectSlug, t.contentKey),
+  ],
+)
+
 export const user = sqliteTable("user", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),

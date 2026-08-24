@@ -2,25 +2,13 @@
 
 import { motion } from "framer-motion";
 import Image from "next/image";
-import { FaClock, FaHeart, FaMoon, FaSun } from "react-icons/fa6";
-
-const morningSlots = [
-  "7:00 AM - 8:00 AM",
-  "8:00 AM - 9:00 AM",
-  "9:00 AM - 10:00 AM",
-  "10:00 AM - 11:00 AM",
-];
-
-const eveningSlots = [
-  "5:00 PM - 6:00 PM",
-  "6:00 PM - 7:00 PM",
-  "7:00 PM - 8:00 PM",
-  "8:00 PM - 9:00 PM",
-];
+import { FaHeart } from "react-icons/fa6";
+import { useTranslation } from "@/lib/text/text-provider";
 
 const HORARIOS_BG = `${process.env.NEXT_PUBLIC_S3}pilates_7.jpg`;
 
 export default function ContentDetail() {
+  const { t } = useTranslation();
   return (
     <section
       id="nosotros"
@@ -48,13 +36,11 @@ export default function ContentDetail() {
           <div className="relative flex h-full flex-col justify-between p-6 text-white">
             <div className="flex items-center gap-2 text-sm font-semibold">
               <FaHeart className="text-red-300" />
-              Studio 57 · Pilates Reformer
-            </div>
+              {t("content.detail.text001")}</div>
             <div>
-              <p className="eyebrow eyebrow-on-dark">Tu bienestar</p>
+              <p className="eyebrow eyebrow-on-dark">{t("content.detail.text002")}</p>
               <p className="mt-2 text-2xl font-semibold font-display">
-                Pilates Reformer para tí.
-              </p>
+                {t("content.detail.text003")}</p>
             </div>
           </div>
         </motion.div>
@@ -67,26 +53,22 @@ export default function ContentDetail() {
           className="flex flex-col gap-6"
         >
           <div>
-            <p className="eyebrow eyebrow-on-light">Reformers</p>
+            <p className="eyebrow eyebrow-on-light">{t("content.detail.text004")}</p>
             <h2 className="mt-3 text-3xl font-semibold leading-tight font-display">
-              Reformers que se adaptan a ti, generando resultados reales.
-            </h2>
+              {t("content.detail.text005")}</h2>
             <p className="mt-2 text-sm text-black/60">
-              El Reformer es un equipo especializado con resortes que proporcionan resistencia controlada, permitiendo realizar movimientos precisos y fluidos, el cual se adapta tanto a principiantes como a personas con experiencia.
-            </p>
+              {t("content.detail.text006")}</p>
           </div>
 
           <div className="flex items-center gap-3 rounded-lg border border-green-base/20 bg-green-base/10 px-4 py-3 text-sm text-green-base"> 
-            Un espacio donde puedes conectar con tu cuerpo.
-          </div>
+            {t("content.detail.text007")}</div>
 
           <div className="flex flex-wrap gap-3">
             <a
               href="#planes"
               className="inline-flex items-center gap-2 rounded-full bg-green-base px-4 py-3 text-sm font-semibold text-white transition hover:bg-green-hover"
             >
-              Ver planes
-            </a>
+              {t("content.detail.text008")}</a>
           </div>
         </motion.div>
       </div>

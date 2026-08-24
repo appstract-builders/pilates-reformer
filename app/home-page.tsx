@@ -20,6 +20,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { routes } from "@/lib/routes";
 import type { PublicPlan } from "@/lib/site/plans";
+import { useTranslation } from "@/lib/text/text-provider";
 
 const LOGO_SRC = `${process.env.NEXT_PUBLIC_S3}Studio57.jpeg`;
 
@@ -40,36 +41,8 @@ const stagger = {
   show: { transition: { staggerChildren: 0.12 } },
 };
 
-const stats = [
-  { label: "Clientes activos", value: "128" },
-  { label: "Ocupación semanal", value: "87%" },
-  { label: "Cobros al día", value: "98%" },
-];
-
-const flow = [
-  {
-    title: "Configura planes y cupos",
-    description:
-      "Define sesiones, límite de reservas y reglas de reprogramación por plan.",
-  },
-  {
-    title: "Automatiza cobros",
-    description:
-      "Mensualidades recurrentes, facturas y recordatorios en un solo lugar.",
-  },
-  {
-    title: "Agenda inteligente",
-    description:
-      "El cliente reserva en tiempo real y recibe confirmación inmediata.",
-  },
-  {
-    title: "Seguimiento continuo",
-    description:
-      "Notas por clase, evolución y renovación automática de planes.",
-  },
-];
-
 export function HomePage(props: { plans: PublicPlan[] }) {
+  const { t } = useTranslation();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const heroVideoRef = useRef<HTMLVideoElement>(null);
@@ -94,10 +67,10 @@ export function HomePage(props: { plans: PublicPlan[] }) {
   };
 
   const navLinks = [
-    { href: "#planes", label: "Planes" },
-    { href: "#nosotros", label: "Nosotros" },
-    { href: routes.agendar, label: "Agenda" },
-    { href: "#cobros", label: "Cobros" },
+    { href: "#planes", label: t("home.nav.plans") },
+    { href: "#nosotros", label: t("home.nav.about") },
+    { href: routes.agendar, label: t("home.nav.schedule") },
+    { href: "#cobros", label: t("home.nav.payments") },
   ];
 
   function goToAgendar(selection?: WeeklyClassSelection) {
@@ -149,7 +122,7 @@ export function HomePage(props: { plans: PublicPlan[] }) {
             >
               <Image
                 src={LOGO_SRC}
-                alt="Studio 57"
+                alt={t("home.page.text001")}
                 fill
                 sizes="63px"
                 className="object-cover shadow-lg shadow-white/20"
@@ -157,8 +130,7 @@ export function HomePage(props: { plans: PublicPlan[] }) {
             </a>
             <div>
               <p className="text-sm font-semibold tracking-wide">
-                Studio 57 · Pilates Reformer
-              </p>
+                {t("home.page.text002")}</p>
             </div>
           </div>
           <div className="hidden items-center gap-6 text-sm font-medium lg:flex">
@@ -175,13 +147,12 @@ export function HomePage(props: { plans: PublicPlan[] }) {
               href="/login"
               className="rounded-full bg-green-base px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-hover"
             >
-              Iniciar sesión
-            </Link>
+              {t("home.page.text003")}</Link>
           </div>
           <button
             type="button"
             onClick={() => setMenuOpen((prev) => !prev)}
-            aria-label="Abrir menú"
+            aria-label={t("home.page.text004")}
             aria-expanded={menuOpen}
             className={`inline-flex h-10 w-10 items-center justify-center rounded-full border transition lg:hidden border-black/20 bg-white/90 text-[#1b1a18]`}
           >
@@ -222,16 +193,15 @@ export function HomePage(props: { plans: PublicPlan[] }) {
             >
               <div className="mb-4 flex items-center justify-between">
                 <div>
-                  <p className="eyebrow eyebrow-muted">Menú</p>
-                  <p className="text-lg font-semibold">Pilates Reformer</p>
+                  <p className="eyebrow eyebrow-muted">{t("home.page.text005")}</p>
+                  <p className="text-lg font-semibold">{t("home.page.text006")}</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setMenuOpen(false)}
                   className="rounded-full border border-black/10 px-3 py-1 text-xs font-semibold text-black/60"
                 >
-                  Cerrar
-                </button>
+                  {t("home.page.text007")}</button>
               </div>
               <div className="flex flex-col gap-3 text-sm font-semibold text-[#1b1a18]">
                 {navLinks.map((link) => (
@@ -250,8 +220,7 @@ export function HomePage(props: { plans: PublicPlan[] }) {
                 onClick={() => setMenuOpen(false)}
                 className="mt-5 block w-full rounded-full bg-green-base px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-green-hover"
               >
-                Iniciar Sesión
-              </Link>
+                {t("home.page.text008")}</Link>
             </motion.div>
           </motion.div>
         )}
@@ -276,17 +245,15 @@ export function HomePage(props: { plans: PublicPlan[] }) {
             <motion.h1
             variants={fadeUp}
             className="text-center text-4xl text-[#f9ecda] font-semibold leading-tight font-display">
-              Bienvenid@
-              <br />
-              Tu cambio comienza en:
-            </motion.h1>
+              {t("home.page.text009")}<br />
+              {t("home.page.text010")}</motion.h1>
             <motion.div
               variants={fadeUp}
               className="m-auto h-24 w-24 object-cover flex justify-center items-center p-2 rounded-full overflow-hidden bg-white"
               >
               <Image
                 src={LOGO_SRC}
-                alt="Studio 57 · Pilates Reformer"
+                alt={t("home.page.text011")}
                 width={80}
                 height={80}
                 className="h-20 w-20 object-cover mx-auto m-1"
@@ -297,27 +264,25 @@ export function HomePage(props: { plans: PublicPlan[] }) {
               variants={fadeUp}
               className="text-center text-4xl font-semibold leading-tight font-display"
             >
-              Studio 57 · Pilates Reformer
-            </motion.h1>
+              {t("home.page.text012")}</motion.h1>
             <motion.h2 variants={fadeUp} className="text-center text-xl font-semibold text-white/80">
-            Lázaro Cárdenas - Michoacán, México
-            </motion.h2>
+            {t("home.page.text013")}</motion.h2>
             <motion.button
               variants={fadeUp}
               type="button"
               onClick={toggleHeroVideo}
-              aria-label={heroVideoPlaying ? "Detener video" : "Reproducir video"}
+              aria-label={heroVideoPlaying ? t("home.hero.stopVideo") : t("home.hero.playVideo")}
               className="mx-auto flex items-center justify-center gap-2 rounded-full bg-black/50 px-4 py-2 text-sm font-semibold text-white transition hover:bg-black/70"
             >
               {heroVideoPlaying ? (
                 <>
                   <FaRegStopCircle size={26} />
-                  <span>Detener</span>
+                  <span>{t("home.page.text014")}</span>
                 </>
               ) : (
                 <>
                   <FaPlayCircle size={26} />
-                  <span>Reproducir</span>
+                  <span>{t("home.page.text015")}</span>
                 </>
               )}
             </motion.button>
@@ -326,8 +291,7 @@ export function HomePage(props: { plans: PublicPlan[] }) {
                 href={routes.agendar}
                 className="rounded-full bg-green-base px-4 py-3 text-sm font-semibold text-white transition hover:bg-green-hover shadow-lg shadow-green-base/20"
               >
-                Clase Muestra
-              </a>
+                {t("home.page.text016")}</a>
             </motion.div>
           </motion.div>
 
@@ -346,8 +310,7 @@ export function HomePage(props: { plans: PublicPlan[] }) {
               href="#planes"
               className="shrink-0 cursor-pointer rounded-full bg-white px-5 py-3 text-center text-sm font-semibold text-[#1b1a18] shadow-lg shadow-black/30 transition hover:-translate-y-0.5"
             >
-              Agendar
-            </a>
+              {t("home.page.text017")}</a>
           </motion.div>
         </div>
       </header>
@@ -362,20 +325,16 @@ export function HomePage(props: { plans: PublicPlan[] }) {
             className="flex flex-col gap-10"
           >
             <motion.div variants={fadeUp} className="max-w-2xl mt-10">
-              <p className="eyebrow eyebrow-on-light">Nuestros planes</p>
+              <p className="eyebrow eyebrow-on-light">{t("home.page.text018")}</p>
               <h2 className="mt-4 text-3xl font-semibold leading-tight md:text-4xl font-display">
-                Elige tus clases
-              </h2>
+                {t("home.page.text019")}</h2>
               <p className="mt-3 text-base text-black/70">
-                Clases de pilates reformer diseñadas para fortalecer tus músculos, mejorar tu postura y desarrolla una conexión mas consciente con tu cuerpo.
-                <br/>Elige el plan que más se adapte a tus objetivos y estilo de vida.
-              </p>
+                {t("home.page.text020")}<br/>{t("home.page.text021")}</p>
             </motion.div>
 
             {props.plans.length === 0 ? (
               <motion.p variants={fadeUp} className="text-base text-black/70">
-                Pronto publicaremos los planes disponibles.
-              </motion.p>
+                {t("home.page.text022")}</motion.p>
             ) : (
               <>
                 <div className="grid gap-8">
@@ -455,8 +414,7 @@ export function HomePage(props: { plans: PublicPlan[] }) {
                             href={`${routes.registry}?plan=${activePrice.planId}`}
                             className="mt-1 inline-flex w-full items-center justify-center rounded-full bg-green-base px-4 py-3 text-sm font-semibold text-white transition hover:bg-green-hover"
                           >
-                            Adquirir Plan
-                          </Link>
+                            {t("home.page.text023")}</Link>
                         </div>
                       </motion.article>
                     );
@@ -478,8 +436,7 @@ export function HomePage(props: { plans: PublicPlan[] }) {
                         href={`${routes.registry}?plan=${plan.prices[0].planId}`}
                         className="inline-flex shrink-0 items-center justify-center rounded-full bg-green-base px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-green-hover"
                       >
-                        Adquirir Clase
-                      </Link>
+                        {t("home.page.text024")}</Link>
                     </div>
                   </motion.div>
                 ))}
@@ -499,23 +456,18 @@ export function HomePage(props: { plans: PublicPlan[] }) {
             className="grid items-center gap-10 lg:grid-cols-[1.05fr_0.95fr]"
           >
             <motion.div variants={fadeUp} className="flex flex-col gap-6">
-              <p className="eyebrow eyebrow-on-light">Quiénes somos</p>
+              <p className="eyebrow eyebrow-on-light">{t("home.page.text025")}</p>
               <h2 className="text-3xl font-semibold leading-tight md:text-4xl font-display">
-                Studio 57 · Pilates Reformer
-              </h2>
+                {t("home.page.text026")}</h2>
               <p className="text-base text-black/70">
-                Studio 57 nació con el propósito de ofrecer un espacio seguro, armonioso y profesional donde el Pilates no solo fortalece tu cuerpo, sino también tu salud mental y tu confianza.
-              </p>
+                {t("home.page.text027")}</p>
               <p className="text-base text-black/70">
-                Inspiración: disfrutar del privilegio del movimiento y un cuerpo sano, curar el dolor, mejorar la calidad de vida de las personas.
-              </p>
+                {t("home.page.text028")}</p>
               <div className="rounded py-4">
                 <p className="text-3xl font-semibold leading-tight md:text-4xl font-display">
-                  Nuestra Visión
-                </p>
+                  {t("home.page.text029")}</p>
                 <p className="mt-2 text-base text-black/70">
-                  Consolidarnos como el estudio de Pilates líder en calidad y calidez humana, ofreciendo clases de Pilates accesibles, profesionales y transformadoras, donde el movimiento se convierte en una herramienta para sanar, fortalecer y disfrutar de la vida con plenitud.
-                </p>
+                  {t("home.page.text030")}</p>
               </div>
             </motion.div>
 
@@ -525,7 +477,7 @@ export function HomePage(props: { plans: PublicPlan[] }) {
             >
               <Image
                 src={`${process.env.NEXT_PUBLIC_S3}material.jpg`}
-                alt="Estudio Studio 57 · Pilates Reformer"
+                alt={t("home.page.text031")}
                 fill
                 sizes="(min-width: 1024px) 45vw, 100vw"
                 className="object-cover"
@@ -544,31 +496,26 @@ export function HomePage(props: { plans: PublicPlan[] }) {
             className="grid gap-12 lg:grid-cols-[1.05fr_0.95fr]"
           >
             <motion.div variants={fadeUp} className="flex flex-col gap-6">
-              <p className="eyebrow eyebrow-on-light">Cobros y renovaciones</p>
+              <p className="eyebrow eyebrow-on-light">{t("home.page.text032")}</p>
               <h2 className="text-3xl font-semibold leading-tight md:text-4xl font-display">
-                Datos para transferencia bancaria.
-              </h2>
+                {t("home.page.text033")}</h2>
               <motion.div
                     key="bank-info"
                     variants={fadeUp}
                     className="flex items-start gap-5 rounded-inner border border-black/5 bg-white/80 px-6 py-5"
               >
                 <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-green-base text-sm font-semibold text-white">
-                  <span>Az</span>
+                  <span>{t("home.page.text034")}</span>
                 </div>
                 <div>
                     <p className="text-base text-black/70">
-                      Banco: Banco Azteca
-                    </p>
+                      {t("home.page.text035")}</p>
                     <p className="text-base text-black/70">
-                      Cuenta: 5263-5401-5974-3604
-                    </p>
+                      {t("home.page.text036")}</p>
                     <p className="text-base text-black/70">
-                      Titular: ADALBERTO RESENDIZ RAGEL
-                    </p>
+                      {t("home.page.text037")}</p>
                     <p className="text-base text-black/70">
-                      Motivo: Nombre completo
-                    </p>
+                      {t("home.page.text038")}</p>
                 </div>
               </motion.div>
             </motion.div>
@@ -578,27 +525,22 @@ export function HomePage(props: { plans: PublicPlan[] }) {
               className="flex flex-col gap-4 rounded-card border border-black/10 bg-white/90 p-6 shadow-[0_20px_40px_rgba(27,26,24,0.1)]"
             >
               <div>
-                <p className="eyebrow eyebrow-muted">Se parte de Studio 57</p>
+                <p className="eyebrow eyebrow-muted">{t("home.page.text039")}</p>
                 <h3 className="mt-3 text-2xl font-semibold font-display">
-                  Disfruta de todos los beneficios del Pilates Reformer.
-                </h3>
+                  {t("home.page.text040")}</h3>
               </div>
               <div className="grid gap-3">
                 <div className="rounded-inner border border-black/5 bg-white px-5 py-4">
-                  <p className="eyebrow text-black/50">Agenda tu clase</p>
+                  <p className="eyebrow text-black/50">{t("home.page.text041")}</p>
                   <p className="text-lg font-semibold">
-                    ¿Aún no tienes cuenta?
-                  </p>
+                    {t("home.page.text042")}</p>
                   <div className="mt-3 flex flex-wrap gap-2 text-xs text-black/60">
                     <span className="rounded-full bg-[#f6f1ea] px-3 py-1">
-                      Reserva tu clase muestra gratuita
-                    </span>
+                      {t("home.page.text043")}</span>
                     <span className="rounded-full bg-[#f6f1ea] px-3 py-1">
-                      Realiza tu primer pago y únete a nuestra comunidad de bienestar.
-                    </span>
+                      {t("home.page.text044")}</span>
                     <span className="rounded-full bg-[#f6f1ea] px-3 py-1">
-                      Configura tus cobros para mantener tu progreso sin interrupciones.
-                    </span>
+                      {t("home.page.text045")}</span>
                   </div>
                 </div>
               </div>
@@ -606,8 +548,7 @@ export function HomePage(props: { plans: PublicPlan[] }) {
                 href={routes.registry}
                 className="rounded-full bg-green-base px-4 py-3 text-center text-sm font-semibold text-white shadow-lg shadow-green-base/20 transition hover:-translate-y-0.5 hover:bg-green-hover"
               >
-                Crear cuenta
-              </Link>
+                {t("home.page.text046")}</Link>
             </motion.div>
           </motion.div>
         </section>
@@ -624,17 +565,13 @@ export function HomePage(props: { plans: PublicPlan[] }) {
               variants={fadeUp}
               className="bg-green-base px-6 py-12 text-center text-white sm:py-16"
             >
-              <p className="eyebrow eyebrow-on-dark mx-auto">Agenda</p>
+              <p className="eyebrow eyebrow-on-dark mx-auto">{t("home.page.text047")}</p>
               <h2 className="mt-3 text-4xl font-semibold leading-tight font-display">
-                Agendar clase
-              </h2>
+                {t("home.page.text048")}</h2>
               <p className="mt-4 text-base text-white/80">
-                Elige fecha y horario. Al confirmar iniciarás sesión para
-                identificar tu reserva.
-              </p>
+                {t("home.page.text049")}</p>
               <p className="text-base text-white/80">
-                Los planes son mensuales y las clases no son acumulables.
-              </p>
+                {t("home.page.text050")}</p>
             </motion.div>
 
             <div className="bg-[#f9f0e3] px-6 py-12 sm:py-16">
@@ -644,26 +581,21 @@ export function HomePage(props: { plans: PublicPlan[] }) {
               >
                 <div className="border-b border-green-base/10 bg-green-base/10 px-6 py-5 text-center">
                   <h3 className="text-lg font-semibold text-green-base font-display">
-                    Reserva tu clase
-                  </h3>
+                    {t("home.page.text051")}</h3>
                 </div>
 
                 <div className="flex flex-col gap-5 p-6">
                   <p className="text-sm text-black/60">
-                    Elige fecha y horario real del estudio. Al confirmar iniciarás
-                    sesión con tu ID y contraseña para identificar tu reserva.
-                  </p>
+                    {t("home.page.text052")}</p>
                   <Link
                     href={routes.agendar}
                     className="w-full rounded-full bg-green-base px-4 py-3 text-center text-sm font-semibold text-white shadow-lg shadow-green-base/20 transition hover:bg-green-hover"
                   >
-                    Ir a agendar
-                  </Link>
+                    {t("home.page.text053")}</Link>
                   <p className="text-center text-xs text-black/50">
-                    ¿No tienes cuenta?{" "}
+                    {t("home.page.text054")}{" "}
                     <Link href="/registry" className="font-semibold text-green-base underline underline-offset-2">
-                      Regístrate aquí
-                    </Link>
+                      {t("home.page.text055")}</Link>
                   </p>
                 </div>
               </motion.div>
@@ -679,19 +611,19 @@ export function HomePage(props: { plans: PublicPlan[] }) {
               <div className="relative h-16 w-16 overflow-hidden border border-white/15">
                 <Image
                   src={LOGO_SRC}
-                  alt="Studio 57 · Pilates Reformer"
+                  alt={t("home.page.text056")}
                   fill
                   sizes="64px"
                   className="object-cover shadow-lg shadow-white/20"
                 />
               </div>
               <div>
-                <p className="text-sm font-semibold">Studio 57 · Pilates Reformer</p>
+                <p className="text-sm font-semibold">{t("home.page.text057")}</p>
               </div>
             </div>
           </div>
           <div className="flex flex-col gap-2 text-sm text-white/70">
-            <p className="text-amber-100">Contacto</p>
+            <p className="text-amber-100">{t("home.page.text058")}</p>
             <a
               href={siteWhatsAppUrl}
               target="_blank"
@@ -703,7 +635,7 @@ export function HomePage(props: { plans: PublicPlan[] }) {
             </a>
           </div>
           <div className="flex flex-col gap-3 text-sm text-white/70">
-            <p className="text-amber-100">Social</p>
+            <p className="text-amber-100">{t("home.page.text059")}</p>
             <a
               href={siteInstagramUrl}
               target="_blank"
@@ -721,8 +653,8 @@ export function HomePage(props: { plans: PublicPlan[] }) {
               transition={{ duration: 0.6, delay: 0.2 }}
               className="mt-4 rounded-card border border-white/10 bg-white/10 p-4 text-sm text-white/70 shadow-[0_20px_40px_rgba(27,26,24,0.1)] backdrop-blur"
             >
-              <p className="text-amber-100">Ubicación</p>
-              <p>Av. Lázaro Cárdenas 123, Col. Centro, Lázaro Cárdenas, Michoacán</p>
+              <p className="text-amber-100">{t("home.page.text060")}</p>
+              <p>{t("home.page.text061")}</p>
               <div className="mt-3 overflow-hidden rounded-inner border border-white/10">
                 <iframe
                   src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3795.3043480185247!2d-102.1976358!3d17.964571900000003!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x84315df7e23a5e4d%3A0x52378ed977416fe4!2sStudio%2057%20Pilates%20Reformer%20LZC!5e0!3m2!1ses!2smx!4v1781316731996!5m2!1ses!2smx"
@@ -732,47 +664,39 @@ export function HomePage(props: { plans: PublicPlan[] }) {
                   allowFullScreen
                   loading="lazy"
                   referrerPolicy="no-referrer-when-downgrade"
-                  title="Ubicación Studio 57 Pilates Reformer"
+                  title={t("home.page.text062")}
                   className="block w-full grayscale"
                 />
               </div>
             </motion.div>
           </div>
           <div className="flex flex-col gap-2 text-sm text-white/70">
-            <p className="text-amber-100">Explorar</p>
+            <p className="text-amber-100">{t("home.page.text063")}</p>
             <a href="#planes" className="transition hover:text-white">
-              Planes
-            </a>
+              {t("home.page.text064")}</a>
             <a href="#nosotros" className="transition hover:text-white">
-              Nosotros
-            </a>
+              {t("home.page.text065")}</a>
             <a href={routes.agendar} className="transition hover:text-white">
-              Agenda
-            </a>
+              {t("home.page.text066")}</a>
             <a href="#cobros" className="transition hover:text-white">
-              Cobros
-            </a>
+              {t("home.page.text067")}</a>
           </div>
           <div className="flex flex-col gap-3 text-sm text-white/70">
-            <p className="text-amber-100">Agenda</p>
+            <p className="text-amber-100">{t("home.page.text068")}</p>
             <p>
-              Ven y conócenos en nuestro estudio para una clase muestra gratuita.
-              con pilates puedes transformar tu bienestar y alcanzar tus objetivos de salud.
-              <br /><br />
-              ¡Te esperamos con los brazos abiertos!
-            </p>
+              {t("home.page.text069")}<br /><br />
+              {t("home.page.text070")}</p>
             <motion.div variants={fadeUp} className="flex flex-wrap gap-4 justify-center">
               <a
               href={routes.agendar}
               className="rounded-full bg-green-base px-4 py-3 text-sm font-semibold text-white transition hover:bg-green-hover shadow-lg shadow-green-base/20">
-                Clase Muestra
-              </a>
+                {t("home.page.text071")}</a>
             </motion.div>
           </div>
         </div>
         <div className="border-t border-white/10">
           <div className="mx-auto flex max-w-6xl flex-col gap-3 px-6 py-6 text-xs text-white/50 md:flex-row md:items-center md:justify-between">
-            <p>© 2026 | Studio 57 · Pilates Reformer.</p>
+            <p>{t("home.page.text072")}</p>
           </div>
         </div>
       </footer>

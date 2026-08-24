@@ -17,6 +17,7 @@ function table<K extends keyof RuntimeSchema>(key: K): RuntimeSchema[K] {
 }
 
 export const user = table("user")
+export const hydrate = table("hydrate")
 export const session = table("session")
 export const account = table("account")
 export const verification = table("verification")

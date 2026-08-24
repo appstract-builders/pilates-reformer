@@ -34,6 +34,7 @@ import {
   type PublicBookingState,
 } from "@/app/agendar/actions"
 import { routes } from "@/lib/routes"
+import { useTranslation } from "@/lib/text/text-provider"
 
 function formatMxn(amount: number): string {
   return new Intl.NumberFormat("es-MX", {
@@ -67,6 +68,7 @@ function AgendarBookingForm(props: {
   onClose: () => void
   onBooked?: () => void
 }) {
+  const { t } = useTranslation()
   const [state, formAction, pending] = useActionState<PublicBookingState, FormData>(
     createPublicBookingAction,
     { success: false },
@@ -211,9 +213,9 @@ function AgendarBookingForm(props: {
         setCheckMessage(
           res.ok
             ? res.alumnaName
-              ? `Puedes reservar: ${res.alumnaName}`
-              : "Horario disponible"
-            : (res.message ?? "No se puede reservar este horario"),
+              ? t("booking.canBookName", { name: res.alumnaName })
+              : t("booking.available")
+            : (res.message ?? t("booking.unavailable")),
         )
       })
     }, 400)
@@ -254,7 +256,7 @@ function AgendarBookingForm(props: {
     const user = await waitForSessionUser()
     if (user == null) {
       setLoginPending(false)
-      setLoginError("Problemas de conexión. Vuelve a intentar.")
+      setLoginError(t("booking.connectionError"))
       return
     }
 
@@ -262,7 +264,7 @@ function AgendarBookingForm(props: {
     if (enabled === false) {
       await authClient.signOut()
       setLoginPending(false)
-      setLoginError("Tu cuenta está inhabilitada. Contacta al estudio.")
+      setLoginError(t("booking.accountDisabled"))
       return
     }
 
@@ -299,11 +301,10 @@ function AgendarBookingForm(props: {
           </div>
         ) : (
           <p className="text-sm text-black/60">
-            Al confirmar, iniciarás sesión con tu ID y contraseña para identificar tu reserva.
-          </p>
+            {t("agendar.booking.modal.text001")}</p>
         )}
         <div className="space-y-2">
-          <Label htmlFor="bookingDate">Fecha de la clase</Label>
+          <Label htmlFor="bookingDate">{t("agendar.booking.modal.text002")}</Label>
           <Input
             id="bookingDate"
             name="bookingDate"
@@ -314,15 +315,15 @@ function AgendarBookingForm(props: {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="scheduleSlotId">Horario</Label>
+          <Label htmlFor="scheduleSlotId">{t("agendar.booking.modal.text003")}</Label>
           {bookingDate === "" ? (
-            <p className="text-sm text-black/60">Elige primero la fecha.</p>
+            <p className="text-sm text-black/60">{t("agendar.booking.modal.text004")}</p>
           ) : slotsForDay.length === 0 ? (
             <div className="space-y-2">
               <p className="text-sm text-black/60">
                 {dayOfWeek === 0
-                  ? "No hay clases los domingos. Elige un día entre lunes y sábado."
-                  : "No hay clases ese día. Elige otra fecha."}
+                  ? t("booking.noSundayClasses")
+                  : t("booking.noClassesThatDay")}
               </p>
               {canUseNextDate ? (
                 <Button
@@ -331,7 +332,7 @@ function AgendarBookingForm(props: {
                   size="sm"
                   onClick={() => setBookingDate(nextDate)}
                 >
-                  Usar {formatBookingDateEs(nextDate)}
+                  {t("agendar.booking.modal.text005")}{formatBookingDateEs(nextDate)}
                 </Button>
               ) : null}
             </div>
@@ -347,7 +348,7 @@ function AgendarBookingForm(props: {
                 className="flex h-10 w-full rounded-inner border border-black/10 bg-white px-3 py-2 text-sm disabled:opacity-60"
               >
                 <option value="">
-                  {loadingDay ? "Consultando lugares…" : "Elige clase y hora"}
+                  {loadingDay ? t("booking.checkingPlaces") : t("booking.chooseClassTime")}
                 </option>
                 {loadingDay
                   ? null
@@ -355,13 +356,13 @@ function AgendarBookingForm(props: {
                       <option key={slot.id} value={slot.id} disabled={slot.free <= 0}>
                         {formatSlotLabel(slot)}
                         {slot.free <= 0
-                          ? " — Llena"
-                          : ` — ${slot.free} ${slot.free === 1 ? "lugar" : "lugares"}`}
+                          ? t("booking.fullSuffix")
+                          : t(slot.free === 1 ? "booking.onePlaceSuffix" : "booking.placesSuffix", { count: slot.free })}
                       </option>
                     ))}
               </select>
               {loadingDay ? (
-                <p className="text-xs text-black/50">Revisando el cupo de esa fecha…</p>
+                <p className="text-xs text-black/50">{t("agendar.booking.modal.text006")}</p>
               ) : null}
             </div>
           )}
@@ -370,31 +371,26 @@ function AgendarBookingForm(props: {
           <div className="space-y-2">
             <p className="text-sm">
               <span className="font-semibold text-[#1b1a18]">
-                {confirmedBooking?.userName ?? sessionUser?.name ?? "Tu nombre"}
+                {confirmedBooking?.userName ?? sessionUser?.name ?? t("booking.yourName")}
               </span>
-              <span className="text-green-700">, tu clase quedó confirmada.</span>
+              <span className="text-green-700">{t("agendar.booking.modal.text007")}</span>
             </p>
             {state.trialRedeemed ? (
               <div className="rounded-inner border border-green-base/30 bg-green-base/5 px-4 py-3 text-sm">
                 <p>
-                  Usaste tu <span className="font-semibold">clase muestra</span>, sin costo.
-                  Es una cortesía de una sola vez: las siguientes van con tu plan o se cargan
-                  a tu cuenta.
-                </p>
+                  {t("agendar.booking.modal.text008")}<span className="font-semibold">{t("agendar.booking.modal.text009")}</span>{t("agendar.booking.modal.text010")}</p>
               </div>
             ) : state.pendingAmount != null ? (
               <div className="rounded-inner border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
                 <p>
-                  Apartaste tu clase sin pago previo. Queda pendiente{" "}
-                  <span className="font-semibold">{formatMxn(state.pendingAmount)}</span>, que
-                  puedes regularizar desde tu cuenta o en el estudio.
-                </p>
+                  {t("agendar.booking.modal.text011")}{" "}
+                  <span className="font-semibold">{formatMxn(state.pendingAmount)}</span>{t("agendar.booking.modal.text012")}</p>
               </div>
             ) : null}
           </div>
         ) : willBeCharged != null && sessionUser != null && scheduleSlotId !== "" ? (
           <div className="space-y-3 rounded-inner border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-            <p className="font-medium">No tienes un plan vigente que cubra esta clase.</p>
+            <p className="font-medium">{t("agendar.booking.modal.text013")}</p>
             {trialAvailable ? (
               <>
                 <div className="space-y-2">
@@ -407,10 +403,9 @@ function AgendarBookingForm(props: {
                         : "border-black/10 bg-white/60 hover:bg-white"
                     }`}
                   >
-                    <span className="block font-medium">Redimir mi clase muestra</span>
+                    <span className="block font-medium">{t("agendar.booking.modal.text014")}</span>
                     <span className="block text-xs text-black/60">
-                      Gratis · una sola vez por cuenta
-                    </span>
+                      {t("agendar.booking.modal.text015")}</span>
                   </button>
                   <button
                     type="button"
@@ -421,25 +416,21 @@ function AgendarBookingForm(props: {
                         : "border-black/10 bg-white/60 hover:bg-white"
                     }`}
                   >
-                    <span className="block font-medium">Contratar clase individual</span>
+                    <span className="block font-medium">{t("agendar.booking.modal.text016")}</span>
                     <span className="block text-xs text-black/60">
-                      {formatMxn(willBeCharged.priceMxn)} · se carga a tu cuenta y lo
-                      regularizas en el estudio
-                    </span>
+                      {formatMxn(willBeCharged.priceMxn)} {t("agendar.booking.modal.text017")}</span>
                   </button>
                 </div>
                 <p className="text-xs">
                   {useTrialClass
-                    ? "Tu clase muestra queda apartada sin costo."
-                    : `Se registrará un adeudo de ${formatMxn(willBeCharged.priceMxn)} en tu cuenta.`}
+                    ? t("booking.trialReservedFree")
+                    : t("booking.debtRegistered", { amount: formatMxn(willBeCharged.priceMxn) })}
                 </p>
               </>
             ) : (
               <p>
-                Apartas tu lugar y queda un adeudo de{" "}
-                <span className="font-semibold">{formatMxn(willBeCharged.priceMxn)}</span>. Lo
-                regularizas en el estudio y ellos lo registran como pagado.
-              </p>
+                {t("agendar.booking.modal.text018")}{" "}
+                <span className="font-semibold">{formatMxn(willBeCharged.priceMxn)}</span>{t("agendar.booking.modal.text019")}</p>
             )}
           </div>
         ) : checkMessage ? (
@@ -448,7 +439,7 @@ function AgendarBookingForm(props: {
           </p>
         ) : null}
         {!isCurrentBookingConfirmed && !canSubmit && bookingDate !== "" && slotsForDay.length === 0 ? null : !isCurrentBookingConfirmed && !canSubmit ? (
-          <p className="text-sm text-black/60">Completa la fecha y el horario.</p>
+          <p className="text-sm text-black/60">{t("agendar.booking.modal.text020")}</p>
         ) : null}
         <div className="flex flex-col gap-2 sm:flex-row">
           <Button
@@ -464,18 +455,16 @@ function AgendarBookingForm(props: {
             {isCurrentBookingConfirmed ? (
               <>
                 <CircleCheck className="h-4 w-4" />
-                Clase confirmada
-              </>
+                {t("agendar.booking.modal.text021")}</>
             ) : pending ? (
               "Guardando..."
             ) : (
-              "Confirmar reserva"
+              t("booking.confirm")
             )}
           </Button>
           {isCurrentBookingConfirmed ? (
             <Button type="button" variant="outline" className="w-full" onClick={props.onClose}>
-              Cerrar
-            </Button>
+              {t("agendar.booking.modal.text022")}</Button>
           ) : null}
         </div>
       </form>
@@ -483,15 +472,14 @@ function AgendarBookingForm(props: {
       <Dialog open={loginOpen} onOpenChange={setLoginOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Inicia sesión para reservar</DialogTitle>
+            <DialogTitle>{t("agendar.booking.modal.text023")}</DialogTitle>
             <DialogDescription>
-              Usa tu ID de usuario (ST) y la contraseña que elegiste al registrarte.
-            </DialogDescription>
+              {t("agendar.booking.modal.text024")}</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleLoginSubmit} className="space-y-4">
             {loginError ? <p className="text-sm text-red-600">{loginError}</p> : null}
             <div className="space-y-2">
-              <Label htmlFor="agendar-login-displayId">ID de usuario</Label>
+              <Label htmlFor="agendar-login-displayId">{t("agendar.booking.modal.text025")}</Label>
               <Input
                 id="agendar-login-displayId"
                 type="text"
@@ -504,7 +492,7 @@ function AgendarBookingForm(props: {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="agendar-login-password">Contraseña</Label>
+              <Label htmlFor="agendar-login-password">{t("agendar.booking.modal.text026")}</Label>
               <div className="relative">
                 <Input
                   id="agendar-login-password"
@@ -520,7 +508,7 @@ function AgendarBookingForm(props: {
                   type="button"
                   onClick={() => setLoginPasswordVisible(!loginPasswordVisible)}
                   className="absolute right-0 top-0 flex h-full w-10 items-center justify-center text-muted-foreground hover:text-foreground"
-                  aria-label={loginPasswordVisible ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  aria-label={loginPasswordVisible ? t("booking.hidePassword") : t("booking.showPassword")}
                   disabled={loginPending}
                 >
                   {loginPasswordVisible ? (
@@ -532,13 +520,12 @@ function AgendarBookingForm(props: {
               </div>
             </div>
             <Button type="submit" className="w-full bg-green-base hover:bg-green-hover" disabled={loginPending}>
-              {loginPending ? "Ingresando..." : "Iniciar sesión y confirmar"}
+              {loginPending ? t("booking.loggingIn") : t("booking.loginAndConfirm")}
             </Button>
             <p className="text-center text-xs text-black/60">
-              ¿Aún no tienes cuenta?{" "}
+              {t("agendar.booking.modal.text027")}{" "}
               <Link href={routes.registry} className="text-green-base underline underline-offset-4">
-                Regístrate aquí
-              </Link>
+                {t("agendar.booking.modal.text028")}</Link>
             </p>
           </form>
         </DialogContent>
@@ -554,6 +541,7 @@ export function AgendarBookingModal(props: {
   initialSlotId?: string | null
   onBooked?: () => void
 }) {
+  const { t } = useTranslation()
   const [data, setData] = useState<AgendarData | null>(null)
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -569,10 +557,10 @@ export function AgendarBookingModal(props: {
         setLoading(false)
       })
       .catch(() => {
-        setLoadError("No se pudo cargar el horario. Intenta de nuevo.")
+        setLoadError(t("booking.scheduleLoadError"))
         setLoading(false)
       })
-  }, [props.open, data])
+  }, [props.open, data, t])
 
   function handleClose() {
     props.onOpenChange(false)
@@ -584,13 +572,12 @@ export function AgendarBookingModal(props: {
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="font-display text-2xl">Agendar clase</DialogTitle>
+          <DialogTitle className="font-display text-2xl">{t("agendar.booking.modal.text029")}</DialogTitle>
           <DialogDescription>
-            Elige fecha y horario. Cada opción muestra los lugares que quedan.
-          </DialogDescription>
+            {t("agendar.booking.modal.text030")}</DialogDescription>
         </DialogHeader>
         {loading ? (
-          <p className="py-8 text-center text-sm text-black/60">Cargando horarios...</p>
+          <p className="py-8 text-center text-sm text-black/60">{t("agendar.booking.modal.text031")}</p>
         ) : loadError ? (
           <div className="space-y-4 py-4">
             <p className="text-sm text-red-600">{loadError}</p>
@@ -603,8 +590,7 @@ export function AgendarBookingModal(props: {
                 setLoadError(null)
               }}
             >
-              Reintentar
-            </Button>
+              {t("agendar.booking.modal.text032")}</Button>
           </div>
         ) : data != null ? (
           <AgendarBookingForm

@@ -6,12 +6,14 @@ import SetupWeeklySchedule from "@/components/setup-weekly-schedule"
 import type { WeeklyClassSelection } from "@/components/setup-weekly-schedule"
 import { AgendarBookingModal } from "@/components/agendar-booking-modal"
 import { routes } from "@/lib/routes"
+import { useTranslation } from "@/lib/text/text-provider"
 
 export function AgendarScreen(props: {
   initialDate?: string | null
   initialSlotId?: string | null
   showIntro?: boolean
 }) {
+  const { t } = useTranslation()
   const router = useRouter()
   const [modalOpen, setModalOpen] = useState(false)
   const [initialDate, setInitialDate] = useState<string | null>(props.initialDate ?? null)
@@ -53,14 +55,11 @@ export function AgendarScreen(props: {
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8 sm:px-6">
       {props.showIntro !== false ? (
         <div className="space-y-2 text-center sm:text-left">
-          <p className="text-sm font-semibold uppercase tracking-wide text-green-base">Agenda</p>
+          <p className="text-sm font-semibold uppercase tracking-wide text-green-base">{t("agendar.screen.text001")}</p>
           <h1 className="font-display text-3xl font-semibold text-[#1b1a18] sm:text-4xl">
-            Horarios de la semana
-          </h1>
+            {t("agendar.screen.text002")}</h1>
           <p className="max-w-2xl text-sm text-black/65 sm:text-base">
-            Elige una clase disponible para reservar. Solo se pueden agendar horarios con cupo y
-            que no estén inhabilitados.
-          </p>
+            {t("agendar.screen.text003")}</p>
         </div>
       ) : null}
 

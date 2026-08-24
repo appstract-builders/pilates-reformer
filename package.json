@@ -16,7 +16,8 @@
     "db:pg:schema": "psql \"%DATABASE_URL%\" -f scripts/postgres-manual/01-schema-completo.sql",
     "db:pg:seed": "psql \"%DATABASE_URL%\" -f scripts/postgres-manual/03-seed-fake.sql",
     "db:pg:reset": "tsx --env-file=.env.local scripts/db-reset.ts",
-    "db:reset:local": "tsx --env-file=.env.local scripts/db-reset.ts --sqlite"
+    "db:reset:local": "tsx --env-file=.env.local scripts/db-reset.ts --sqlite",
+    "seed:hydrate": "node scripts/seed-hydrate.mjs"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.20",

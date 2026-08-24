@@ -20,6 +20,7 @@ import {
 } from "@/lib/site/schedule-board"
 import { DEFAULT_BOOKING_WINDOW_MINUTES } from "@/lib/booking-rules"
 import { loadWeeklyBoardAction } from "@/app/agendar/actions"
+import { useTranslation } from "@/lib/text/text-provider"
 
 function dateStrForWeekDay(monday: Date, dayOfWeek: number): string {
   const d = new Date(monday)
@@ -40,6 +41,7 @@ export default function SetupWeeklySchedule({
 }: {
   onSelectClass?: (selection: WeeklyClassSelection) => void
 } = {}) {
+  const { t } = useTranslation()
   const [weekOffset, setWeekOffset] = useState(0)
   const [slots, setSlots] = useState<PublicScheduleSlot[]>([])
   const [enrollments, setEnrollments] = useState<Record<string, number>>({})
@@ -107,7 +109,7 @@ export default function SetupWeeklySchedule({
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <p className="font-display text-xl leading-tight">Horario semanal</p>
+          <p className="font-display text-xl leading-tight">{t("setup.weekly.schedule.text001")}</p>
           {hasSlots ? (
             <p className="text-xs font-semibold text-white/70">{weekLabel}</p>
           ) : null}
@@ -120,8 +122,8 @@ export default function SetupWeeklySchedule({
               disabled={!canGoToPreviousWeek}
               title={
                 canGoToPreviousWeek
-                  ? "Semana anterior"
-                  : "Las semanas ya transcurridas no se pueden reservar"
+                  ? t("schedule.previousWeek")
+                  : t("schedule.previousWeekUnavailable")
               }
               className={`grid h-8 w-8 place-items-center rounded-full border border-white/25 transition ${
                 canGoToPreviousWeek
@@ -144,14 +146,12 @@ export default function SetupWeeklySchedule({
 
       {loading ? (
         <div className="flex min-h-[220px] flex-1 items-center justify-center text-sm text-white/70">
-          Cargando horarios...
-        </div>
+          {t("setup.weekly.schedule.text002")}</div>
       ) : !hasSlots ? (
         <div className="flex min-h-[220px] flex-1 flex-col items-center justify-center px-4 text-center">
-          <p className="font-display text-lg leading-tight">Sin horarios por el momento</p>
+          <p className="font-display text-lg leading-tight">{t("setup.weekly.schedule.text003")}</p>
           <p className="mt-2 text-xs font-semibold text-white/70">
-            Vuelve pronto o contáctanos para conocer la disponibilidad.
-          </p>
+            {t("setup.weekly.schedule.text004")}</p>
         </div>
       ) : (
         <>
@@ -160,8 +160,7 @@ export default function SetupWeeklySchedule({
               <thead>
                 <tr>
                   <th className="border-b border-r border-white/15 p-1.5 text-left font-bold text-white/70 sm:p-2">
-                    Hora
-                  </th>
+                    {t("setup.weekly.schedule.text005")}</th>
                   {scheduleDayLabels.map((day) => (
                     <th
                       key={day.dayOfWeek}
@@ -212,12 +211,12 @@ export default function SetupWeeklySchedule({
                         past,
                       })
                       const title = past
-                        ? "Esta clase ya pasó"
+                        ? t("schedule.classPast")
                         : disabled
-                          ? "No disponible esta semana"
+                          ? t("schedule.classUnavailable")
                           : full
-                            ? "Clase llena"
-                            : `${enrolled} inscritos · aforo ${slot.capacity}`
+                            ? t("schedule.classFull")
+                            : t("schedule.enrollment", { enrolled, capacity: slot.capacity })
 
                       return (
                         <td
@@ -237,7 +236,7 @@ export default function SetupWeeklySchedule({
                                   : "cursor-not-allowed bg-white/20 text-white/60 line-through"
                             }`}
                           >
-                            {disabled ? "Off" : full ? "Llena" : "Clase"}
+                            {disabled ? t("schedule.off") : full ? t("schedule.full") : t("schedule.class")}
                             {disabled ? null : (
                               <span
                                 className={`absolute -top-1.5 -right-2 flex h-4 min-w-[1.65rem] items-center justify-center rounded-full px-1 text-[8px] font-bold leading-none sm:text-[9px] ${
@@ -264,8 +263,7 @@ export default function SetupWeeklySchedule({
           </div>
 
           <p className="text-center text-xs font-semibold text-white/70">
-            Elige una clase disponible para reservar. La burbuja muestra inscritos / aforo.
-          </p>
+            {t("setup.weekly.schedule.text006")}</p>
         </>
       )}
     </div>

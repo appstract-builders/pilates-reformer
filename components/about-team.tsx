@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import Image from "next/image";
+import { useTranslation } from "@/lib/text/text-provider";
 
 const TEAM_IMAGE = `${process.env.NEXT_PUBLIC_S3}pilates_5.jpg`;
 
@@ -16,6 +17,7 @@ const stagger = {
 };
 
 export default function AboutTeam() {
+  const { t } = useTranslation();
   return (
     <section id="nosotros" className="scroll-mt-40">
       <motion.div
@@ -26,29 +28,18 @@ export default function AboutTeam() {
         className="grid items-center gap-10 lg:grid-cols-[0.95fr_1.05fr]"
       >
         <motion.div variants={fadeUp} className="flex flex-col gap-6">
-          <p className="eyebrow eyebrow-on-light">Nuestro equipo</p>
+          <p className="eyebrow eyebrow-on-light">{t("about.team.text001")}</p>
           <h2 className="text-3xl font-semibold leading-tight md:text-4xl font-display">
-            Quiénes somos
-          </h2>
+            {t("about.team.text002")}</h2>
           <p className="text-base text-black/70">
-            Somos un equipo de instructores certificados en Pilates Reformer,
-            enfocados en acompañar a cada persona según su nivel y sus
-            objetivos. Trabajamos con grupos reducidos para garantizar
-            atención personalizada en cada clase.
-          </p>
+            {t("about.team.text003")}</p>
           <p className="text-base text-black/70">
-            Nuestra metodología combina técnica, progresión gradual y
-            seguimiento continuo, de modo que cada sesión sea segura y
-            efectiva. Más que un estudio, buscamos crear una comunidad donde el
-            movimiento consciente forme parte de tu día a día.
-          </p>
+            {t("about.team.text004")}</p>
           <div className="rounded py-4">
             <p className="text-3xl font-semibold leading-tight md:text-4xl font-display">
-              Nuestra Misión
-            </p>
+              {t("about.team.text005")}</p>
             <p className="mt-2 text-base text-black/70">
-              Brindar clases de Pilates Reformer accesibles y de alta calidad, promoviendo el bienestar integral, la confianza y el respeto por los procesos individuales de cada alumno.
-            </p>
+              {t("about.team.text006")}</p>
           </div>
         </motion.div>
 
@@ -58,7 +49,7 @@ export default function AboutTeam() {
         >
           <Image
             src={TEAM_IMAGE}
-            alt="Equipo de Studio 57 · Pilates Reformer"
+            alt={t("about.team.text007")}
             fill
             sizes="(min-width: 1024px) 55vw, 100vw"
             className="object-cover object-top"
