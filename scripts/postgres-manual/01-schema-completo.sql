@@ -82,6 +82,7 @@ CREATE TABLE IF NOT EXISTS "payment" (
 	"id" text PRIMARY KEY NOT NULL,
 	"user_id" text NOT NULL,
 	"subscription_id" text,
+	"booking_id" text,
 	"amount" double precision NOT NULL,
 	"currency" text DEFAULT 'MXN' NOT NULL,
 	"method" text DEFAULT 'efectivo' NOT NULL,

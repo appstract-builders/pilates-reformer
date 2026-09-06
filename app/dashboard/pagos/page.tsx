@@ -29,6 +29,7 @@ function statusBadge(status: string) {
   if (status === "succeeded") return <Badge className="bg-green-100 text-green-700 border-green-200">Exitoso</Badge>
   if (status === "pending") return <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200">Pendiente</Badge>
   if (status === "failed") return <Badge className="bg-red-100 text-red-700 border-red-200">Fallido</Badge>
+  if (status === "cancelled") return <Badge variant="outline" className="text-muted-foreground">Anulado</Badge>
   return <Badge variant="secondary">{status}</Badge>
 }
 

@@ -111,12 +111,30 @@ export function canAccessDashboardPath(
   return isNavAllowed(perms, navKey, role)
 }
 
+/**
+ * A dónde mandar a cada rol cuando entra a una ruta que no le toca. Sin esto se
+ * usaba el primer item del menú en orden de `mainNavItems`, y una alumna con
+ * "mi-horario" habilitado aterrizaba en el horario del coach en vez de en sus
+ * reservas, que es donde vive su adeudo.
+ */
+const ROLE_LANDING_PREFERENCE: Record<ConfigurableRole, string[]> = {
+  root: [routes.dashboard],
+  admin: [routes.dashboard],
+  coach: [routes.coachSchedule, routes.coachAttendance, routes.dashboard],
+  alumno: [routes.reservas, routes.historico, routes.planes],
+}
+
 export function getFirstAllowedDashboardUrl(
   role: string,
   permissions?: NavPermissionsMap,
 ): string {
   const items = getNavItemsForRole(role, permissions)
   if (items.length === 0) return routes.dashboard
+
+  const preferred = ROLE_LANDING_PREFERENCE[role as ConfigurableRole] ?? []
+  for (const url of preferred) {
+    if (items.some((item) => item.url === url)) return url
+  }
   return items[0].url
 }
 

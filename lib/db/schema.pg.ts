@@ -205,6 +205,7 @@ export const payment = pgTable(
     id: text("id").primaryKey(),
     userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
     subscriptionId: text("subscription_id").references(() => subscription.id),
+    bookingId: text("booking_id"),
     amount: doublePrecision("amount").notNull(),
     currency: text("currency").notNull().default("MXN"),
     method: text("method").notNull().default("efectivo"),

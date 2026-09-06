@@ -128,6 +128,7 @@ export async function createBookingAction(
         className: slotInfo?.className ?? "Clase",
         bookingDate,
         startTime: slotInfo?.startTime ?? "",
+        bookingId: result.bookingId,
       })
       if (charge.ok) {
         chargeNote = ` · Adeudo registrado: ${new Intl.NumberFormat("es-MX", {
@@ -135,6 +136,8 @@ export async function createBookingAction(
           currency: "MXN",
           maximumFractionDigits: 0,
         }).format(charge.amount)}`
+      } else {
+        chargeNote = " · Sin adeudo registrado: falta configurar el plan de clase individual"
       }
     }
 

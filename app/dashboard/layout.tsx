@@ -73,11 +73,15 @@ export default async function DashboardLayout({
   const noNavAccess = hasNoNavAccess(role, navPermissions)
 
   const pathname = headersList.get("x-dashboard-pathname") ?? routes.dashboard
-  if (
-    !noNavAccess &&
-    !canAccessDashboardPath(role, pathname, navPermissions)
-  ) {
-    redirect(getFirstAllowedDashboardUrl(role, navPermissions))
+  let blockedByPermissions = false
+  if (!noNavAccess && !canAccessDashboardPath(role, pathname, navPermissions)) {
+    const landing = getFirstAllowedDashboardUrl(role, navPermissions)
+    // Guard anti-loop: si el destino tampoco pasa el permiso, o es la ruta en la
+    // que ya estamos, redirigir sólo encadena 307 hasta que el navegador corta.
+    if (landing !== pathname && canAccessDashboardPath(role, landing, navPermissions)) {
+      redirect(landing)
+    }
+    blockedByPermissions = true
   }
 
   // Fetch welcomeShown + policy message only for alumnos — avoids unnecessary DB calls for staff
@@ -122,7 +126,7 @@ export default async function DashboardLayout({
           <SidebarInset className="min-w-0">
             <Navbar userName={navName} userEmail={navEmail} role={role} />
             <main className="flex-1 overflow-auto min-w-0">
-              {noNavAccess ? <NoAccessPanel /> : children}
+              {noNavAccess || blockedByPermissions ? <NoAccessPanel /> : children}
             </main>
           </SidebarInset>
         </DashboardProviders>

@@ -28,6 +28,7 @@ async function main() {
   }
   await db.insert(schema.account).values({
     id: `${ALU}-c`, userId: ALU, accountId: ALU, providerId: "credential",
+    issuer: "local:credential",
     password: await hashPassword("SondaS9123"),
   })
   // Dos fechas distintas del mismo día de la semana, con cupo distinto

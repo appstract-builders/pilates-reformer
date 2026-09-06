@@ -19,6 +19,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { routes } from "@/lib/routes";
+import { AccountNavLink } from "@/components/features/site/account-nav-link";
 import type { PublicPlan } from "@/lib/site/plans";
 import { useTranslation } from "@/lib/text/text-provider";
 
@@ -41,7 +42,7 @@ const stagger = {
   show: { transition: { staggerChildren: 0.12 } },
 };
 
-export function HomePage(props: { plans: PublicPlan[] }) {
+export function HomePage(props: { plans: PublicPlan[]; loggedIn?: boolean }) {
   const { t } = useTranslation();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -143,11 +144,10 @@ export function HomePage(props: { plans: PublicPlan[] }) {
                 {link.label}
               </a>
             ))}
-            <Link
-              href="/login"
+            <AccountNavLink
+              initialLoggedIn={props.loggedIn}
               className="rounded-full bg-green-base px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-hover"
-            >
-              {t("home.page.text003")}</Link>
+            />
           </div>
           <button
             type="button"
@@ -215,12 +215,11 @@ export function HomePage(props: { plans: PublicPlan[] }) {
                   </a>
                 ))}
               </div>
-              <Link
-                href="/login"
-                onClick={() => setMenuOpen(false)}
+              <AccountNavLink
+                initialLoggedIn={props.loggedIn}
+                onNavigate={() => setMenuOpen(false)}
                 className="mt-5 block w-full rounded-full bg-green-base px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-green-hover"
-              >
-                {t("home.page.text008")}</Link>
+              />
             </motion.div>
           </motion.div>
         )}

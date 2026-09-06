@@ -1,6 +1,6 @@
 import type { AnyDb } from "@/lib/db"
 import * as schema from "@/lib/db/schema"
-import { and, asc, eq, isNull } from "drizzle-orm"
+import { and, asc, eq, gt, inArray, isNull, ne } from "drizzle-orm"
 import { createNotification } from "@/lib/notifications"
 import { formatTime12h } from "@/lib/time-utils"
 
@@ -8,7 +8,7 @@ export const INDIVIDUAL_CLASS_PLAN_ID = "plan-individual"
 
 /**
  * Precio de la clase suelta: el plan `plan-individual` y, si no existe, el
- * paquete activo más barato de una sola clase.
+ * paquete activo más barato de una sola clase con precio mayor a cero.
  */
 export async function getIndividualClassPlan(
   db: AnyDb,
@@ -25,6 +25,8 @@ export async function getIndividualClassPlan(
 
   if (exact != null) return exact
 
+  // La cortesía "Clase Muestra" también es un paquete de 1 clase, pero vale 0:
+  // si se colara aquí, cada clase suelta se cobraría en cero.
   const [fallback] = await db
     .select({
       id: schema.plan.id,
@@ -32,7 +34,13 @@ export async function getIndividualClassPlan(
       priceMxn: schema.plan.priceMxn,
     })
     .from(schema.plan)
-    .where(and(eq(schema.plan.isActive, true), eq(schema.plan.totalClasses, 1)))
+    .where(
+      and(
+        eq(schema.plan.isActive, true),
+        eq(schema.plan.totalClasses, 1),
+        gt(schema.plan.priceMxn, 0),
+      ),
+    )
     .orderBy(asc(schema.plan.priceMxn))
     .limit(1)
 
@@ -63,6 +71,8 @@ export async function chargeIndividualClass(
     className: string
     bookingDate: Date
     startTime: string
+    /** Reserva que originó el cobro: al cancelarla, el adeudo se anula. */
+    bookingId?: string | null
   },
 ): Promise<ClassChargeResult> {
   const plan = await getIndividualClassPlan(db)
@@ -79,6 +89,7 @@ export async function chargeIndividualClass(
   await db.insert(schema.payment).values({
     id: crypto.randomUUID(),
     userId: params.userId,
+    bookingId: params.bookingId ?? null,
     amount: plan.priceMxn,
     method: "efectivo",
     status: "pending",
@@ -93,6 +104,41 @@ export async function chargeIndividualClass(
   })
 
   return { ok: true, amount: plan.priceMxn, concept }
+}
+
+/**
+ * Aviso al staff cuando una reserva se quedó sin adeudo por falta de un plan de
+ * clase individual: si nadie lo ve, esa clase se regala en silencio.
+ */
+export async function notifyStaffChargeNotRegistered(
+  db: AnyDb,
+  params: { userName: string; className: string; bookingDate: Date },
+): Promise<void> {
+  const staff = await db
+    .select({ id: schema.user.id })
+    .from(schema.user)
+    .where(
+      and(
+        inArray(schema.user.role, ["admin", "root"]),
+        ne(schema.user.enabled, false),
+      ),
+    )
+
+  if (staff.length === 0) return
+
+  const fechaLabel = params.bookingDate.toLocaleDateString("es-MX", {
+    day: "numeric",
+    month: "short",
+  })
+
+  for (const row of staff) {
+    await createNotification(db, {
+      userId: row.id,
+      type: "class_charge_missing_plan",
+      title: "Clase reservada sin adeudo",
+      body: `${params.userName} reservó ${params.className} del ${fechaLabel} sin plan que la cubra, pero no hay un plan de clase individual activo, así que no se registró ningún cobro. Configura el plan "Clase Individual" y cobra esa clase a mano.`,
+    })
+  }
 }
 
 export async function hasUsedTrialClass(db: AnyDb, userId: string): Promise<boolean> {
@@ -138,6 +184,39 @@ export async function consumeTrialClass(
   })
 
   return { ok: true }
+}
+
+/**
+ * Anula el adeudo de una clase que se canceló. Sólo toca cobros que siguen
+ * pendientes: si el estudio ya lo cobró, el reembolso es decisión humana.
+ */
+export async function voidPendingChargeForBooking(
+  db: AnyDb,
+  params: { bookingId: string; userId: string; userName: string },
+): Promise<{ voidedAmount: number }> {
+  const rows = await db
+    .update(schema.payment)
+    .set({ status: "cancelled" })
+    .where(
+      and(
+        eq(schema.payment.bookingId, params.bookingId),
+        eq(schema.payment.status, "pending"),
+        eq(schema.payment.isNegative, false),
+      ),
+    )
+    .returning({ amount: schema.payment.amount })
+
+  const voidedAmount = rows.reduce((sum, row) => sum + row.amount, 0)
+  if (voidedAmount <= 0) return { voidedAmount: 0 }
+
+  await createNotification(db, {
+    userId: params.userId,
+    type: "class_charge_voided",
+    title: "Adeudo cancelado",
+    body: `Hola ${params.userName}, al cancelar tu clase dimos de baja el pago pendiente de ${formatMxn(voidedAmount)}. Ya no aparece en tu cuenta.`,
+  })
+
+  return { voidedAmount }
 }
 
 /** Saldo pendiente de la cuenta, para mostrárselo a la alumna. */

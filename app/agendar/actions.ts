@@ -18,6 +18,7 @@ import {
   consumeTrialClass,
   getIndividualClassPlan,
   hasUsedTrialClass,
+  notifyStaffChargeNotRegistered,
 } from "@/lib/class-charge"
 import { validateBookingAgeForSlot } from "@/lib/booking-rules"
 import {
@@ -33,8 +34,17 @@ import {
   toLocalDateStr,
 } from "@/lib/booking-slot-options"
 import { isSlotDisabledOnDate, listDisabledSlotDateKeys } from "@/lib/slot-exceptions"
+import {
+  loadActivePlanSummary,
+  loadSuggestedPlans,
+  type ActivePlanSummary,
+  type SuggestedPlan,
+} from "@/lib/booking-plan-info"
 import { loadLandingScheduleBoard } from "@/lib/site/schedule-board.server"
 import { getMondayOfWeek } from "@/lib/site/schedule"
+
+// El modal los consume desde este mismo módulo.
+export type { ActivePlanSummary, SuggestedPlan }
 
 export type PublicBookingState = {
   success: boolean
@@ -45,6 +55,8 @@ export type PublicBookingState = {
   pendingAmount?: number
   /** La reserva se cubrió con la clase muestra, sin costo. */
   trialRedeemed?: boolean
+  /** El lugar quedó apartado pero no se pudo calcular el adeudo. */
+  chargeFailed?: boolean
 }
 
 export type AgendarData = {
@@ -261,6 +273,7 @@ export async function createPublicBookingAction(
   // Sin plan que la cubra: o redime su clase muestra, o queda como adeudo.
   let pendingAmount: number | undefined
   let trialRedeemed = false
+  let chargeFailed = false
   if (!result.coveredByPlan) {
     const [slot] = await db
       .select({
@@ -294,11 +307,21 @@ export async function createPublicBookingAction(
         className,
         bookingDate,
         startTime: slot?.startTime ?? "",
+        bookingId: result.bookingId,
       })
       if (charge.ok) {
         pendingAmount = charge.amount
       } else {
+        // Sin plan individual configurado no hay precio que cobrar: el lugar
+        // queda apartado, pero el estudio tiene que enterarse o la clase se va
+        // gratis sin que nadie lo note.
         console.error("[agendar] No se pudo registrar el adeudo:", charge.error)
+        chargeFailed = true
+        await notifyStaffChargeNotRegistered(db, {
+          userName: result.userName,
+          className,
+          bookingDate,
+        })
       }
     }
   }
@@ -312,6 +335,7 @@ export async function createPublicBookingAction(
     bookedDate: parsed.data.bookingDate,
     pendingAmount,
     trialRedeemed,
+    chargeFailed,
   }
 }
 
@@ -323,6 +347,10 @@ export type BookingEligibility = {
   willBeCharged?: { priceMxn: number; planName: string }
   /** La cuenta aún no redime su clase muestra gratuita. */
   trialAvailable?: boolean
+  /** Plan que va a cubrir la clase, para mostrar vigencia y clases restantes. */
+  activePlan?: ActivePlanSummary
+  /** Alternativas al cobro suelto cuando no hay plan vigente. */
+  suggestedPlans?: SuggestedPlan[]
 }
 
 export async function checkPublicBookingEligibility(
@@ -399,9 +427,10 @@ export async function checkPublicBookingEligibility(
   // y el estudio regulariza el pago.
   const subCheck = await checkBookableSubscriptionForUser(db, alumna.id)
   if (!subCheck.ok) {
-    const [plan, trialUsed] = await Promise.all([
+    const [plan, trialUsed, suggestedPlans] = await Promise.all([
       getIndividualClassPlan(db),
       hasUsedTrialClass(db, alumna.id),
+      loadSuggestedPlans(db),
     ])
     return {
       ok: true,
@@ -409,8 +438,13 @@ export async function checkPublicBookingEligibility(
       willBeCharged:
         plan != null ? { priceMxn: plan.priceMxn, planName: plan.name } : undefined,
       trialAvailable: !trialUsed,
+      suggestedPlans,
     }
   }
 
-  return { ok: true, alumnaName: alumna.name }
+  return {
+    ok: true,
+    alumnaName: alumna.name,
+    activePlan: await loadActivePlanSummary(db, subCheck.subscriptionId),
+  }
 }

@@ -24,7 +24,8 @@ async function main() {
       role: u.role, displayId: u.did, idPrefix: "ST", enabled: true,
     })
     await db.insert(schema.account).values({
-      id: `${u.id}-c`, userId: u.id, accountId: u.id, providerId: "credential", password: hashed,
+      id: `${u.id}-c`, userId: u.id, accountId: u.id, providerId: "credential",
+      issuer: "local:credential", password: hashed,
     })
   }
   console.log("creados")

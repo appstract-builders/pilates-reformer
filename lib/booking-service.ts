@@ -20,6 +20,7 @@ import {
   pickPrimarySubscription,
 } from "@/lib/subscription-display"
 import { isSlotDisabledOnDate } from "@/lib/slot-exceptions"
+import { voidPendingChargeForBooking } from "@/lib/class-charge"
 
 export type CreateBookingResult =
   | {
@@ -300,7 +301,13 @@ export async function createBookingForUser(
 }
 
 export type CancelBookingResult =
-  | { ok: true; late: boolean; restoredClass: boolean }
+  | {
+      ok: true
+      late: boolean
+      restoredClass: boolean
+      /** Adeudo pendiente que se anuló junto con la reserva; 0 si no había. */
+      voidedChargeAmount: number
+    }
   | { ok: false; message: string }
 
 export async function cancelBookingById(
@@ -395,6 +402,21 @@ export async function cancelBookingById(
     .set({ status: "cancelled", cancelledAt: new Date() })
     .where(eq(schema.booking.id, bookingId))
 
+  // La clase que no cubrió un plan dejó un adeudo abierto: al liberar el lugar
+  // ese cobro tiene que morir con la reserva, o la alumna arrastra una deuda
+  // por una clase que ya no va a tomar.
+  const [owner] = await db
+    .select({ name: schema.user.name })
+    .from(schema.user)
+    .where(eq(schema.user.id, booking.userId))
+    .limit(1)
+
+  const voided = await voidPendingChargeForBooking(db, {
+    bookingId,
+    userId: booking.userId,
+    userName: owner?.name ?? "Usuario",
+  })
+
   if (restoreClass) {
     const [activeSub] = await db
       .select({ id: schema.subscription.id })
@@ -412,5 +434,10 @@ export async function cancelBookingById(
     }
   }
 
-  return { ok: true, late, restoredClass: restoreClass }
+  return {
+    ok: true,
+    late,
+    restoredClass: restoreClass,
+    voidedChargeAmount: voided.voidedAmount,
+  }
 }

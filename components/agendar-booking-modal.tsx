@@ -30,8 +30,10 @@ import {
   createPublicBookingAction,
   loadAgendarDataAction,
   loadDayAvailabilityAction,
+  type ActivePlanSummary,
   type AgendarData,
   type PublicBookingState,
+  type SuggestedPlan,
 } from "@/app/agendar/actions"
 import { routes } from "@/lib/routes"
 import { useTranslation } from "@/lib/text/text-provider"
@@ -42,6 +44,15 @@ function formatMxn(amount: number): string {
     currency: "MXN",
     maximumFractionDigits: 0,
   }).format(amount)
+}
+
+function formatPlanDate(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number)
+  if (!y || !m || !d) return dateStr
+  return new Date(y, m - 1, d).toLocaleDateString("es-MX", {
+    day: "numeric",
+    month: "long",
+  })
 }
 
 async function waitForSessionUser() {
@@ -101,6 +112,8 @@ function AgendarBookingForm(props: {
   } | null>(null)
   const [trialAvailable, setTrialAvailable] = useState(false)
   const [useTrialClass, setUseTrialClass] = useState(false)
+  const [activePlan, setActivePlan] = useState<ActivePlanSummary | null>(null)
+  const [suggestedPlans, setSuggestedPlans] = useState<SuggestedPlan[]>([])
   // Cupo real de la fecha elegida; se recarga al cambiarla y tras reservar.
   const [dayBooked, setDayBooked] = useState<Record<string, number> | null>(null)
   const [loadingDay, setLoadingDay] = useState(false)
@@ -195,6 +208,8 @@ function AgendarBookingForm(props: {
       setWillBeCharged(null)
       setTrialAvailable(false)
       setUseTrialClass(false)
+      setActivePlan(null)
+      setSuggestedPlans([])
       return
     }
     if (isCurrentBookingConfirmed) {
@@ -205,6 +220,8 @@ function AgendarBookingForm(props: {
       checkPublicBookingEligibility(scheduleSlotId, bookingDate).then((res) => {
         if (cancelled) return
         setWillBeCharged(res.ok ? (res.willBeCharged ?? null) : null)
+        setActivePlan(res.ok ? (res.activePlan ?? null) : null)
+        setSuggestedPlans(res.ok ? (res.suggestedPlans ?? []) : [])
         // La clase muestra viene marcada por defecto: es gratis y de una sola vez.
         const trial = res.ok && res.trialAvailable === true
         setTrialAvailable(trial)
@@ -330,6 +347,7 @@ function AgendarBookingForm(props: {
                   type="button"
                   variant="outline"
                   size="sm"
+                  className="border-green-base/40 bg-white text-green-base hover:bg-green-base/10 hover:text-green-hover"
                   onClick={() => setBookingDate(nextDate)}
                 >
                   {t("agendar.booking.modal.text005")}{formatBookingDateEs(nextDate)}
@@ -380,6 +398,14 @@ function AgendarBookingForm(props: {
                 <p>
                   {t("agendar.booking.modal.text008")}<span className="font-semibold">{t("agendar.booking.modal.text009")}</span>{t("agendar.booking.modal.text010")}</p>
               </div>
+            ) : state.chargeFailed === true ? (
+              <div className="rounded-inner border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+                <p>
+                  Tu lugar quedó apartado. El estudio te confirmará el importe de
+                  la clase, porque todavía no hay un precio de clase individual
+                  configurado.
+                </p>
+              </div>
             ) : state.pendingAmount != null ? (
               <div className="rounded-inner border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
                 <p>
@@ -387,6 +413,44 @@ function AgendarBookingForm(props: {
                   <span className="font-semibold">{formatMxn(state.pendingAmount)}</span>{t("agendar.booking.modal.text012")}</p>
               </div>
             ) : null}
+          </div>
+        ) : activePlan != null && sessionUser != null && scheduleSlotId !== "" ? (
+          <div className="space-y-1 rounded-inner border border-green-base/30 bg-green-base/5 px-4 py-3 text-sm">
+            <p className="font-medium text-green-base">{t("booking.planActiveTitle")}</p>
+            <p className="font-semibold text-[#1b1a18]">{activePlan.name}</p>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-black/60">
+              <span>
+                {activePlan.daysLeft === 0
+                  ? t("booking.planExpiresToday", { date: formatPlanDate(activePlan.endDate) })
+                  : activePlan.daysLeft === 1
+                    ? t("booking.planExpiresTomorrow", { date: formatPlanDate(activePlan.endDate) })
+                    : t("booking.planExpiresIn", {
+                        days: activePlan.daysLeft,
+                        date: formatPlanDate(activePlan.endDate),
+                      })}
+              </span>
+              <span aria-hidden>·</span>
+              <span>
+                {activePlan.classesRemaining != null
+                  ? activePlan.classesRemaining === 1
+                    ? t("booking.planOneClassLeft")
+                    : t("booking.planClassesLeft", { count: activePlan.classesRemaining })
+                  : activePlan.isUnlimited
+                    ? t("booking.planUnlimited")
+                    : activePlan.daysPerWeek != null
+                      ? t("booking.planDaysPerWeek", { count: activePlan.daysPerWeek })
+                      : t("booking.planActive")}
+              </span>
+            </div>
+            {/* Barra de vigencia: 30 días es el ciclo típico del estudio. */}
+            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-green-base/15">
+              <div
+                className="h-full rounded-full bg-green-base transition-all"
+                style={{
+                  width: `${Math.max(4, Math.min(100, (activePlan.daysLeft / activePlan.totalDays) * 100))}%`,
+                }}
+              />
+            </div>
           </div>
         ) : willBeCharged != null && sessionUser != null && scheduleSlotId !== "" ? (
           <div className="space-y-3 rounded-inner border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
@@ -432,6 +496,31 @@ function AgendarBookingForm(props: {
                 {t("agendar.booking.modal.text018")}{" "}
                 <span className="font-semibold">{formatMxn(willBeCharged.priceMxn)}</span>{t("agendar.booking.modal.text019")}</p>
             )}
+            {suggestedPlans.length > 0 ? (
+              <div className="space-y-2 border-t border-amber-200 pt-3">
+                <p className="font-medium">{t("booking.planSuggestTitle")}</p>
+                <p className="text-xs">{t("booking.planSuggestBody")}</p>
+                <ul className="space-y-1">
+                  {suggestedPlans.map((plan) => (
+                    <li
+                      key={plan.id}
+                      className="flex items-center justify-between gap-3 rounded-inner bg-white/70 px-3 py-2 text-xs"
+                    >
+                      <span className="font-medium text-[#1b1a18]">{plan.name}</span>
+                      <span className="shrink-0 font-semibold text-green-base">
+                        {formatMxn(plan.priceMxn)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  href="/#planes"
+                  className="inline-flex rounded-full bg-green-base px-4 py-2 text-xs font-semibold text-white transition hover:bg-green-hover"
+                >
+                  {t("booking.planSuggestCta")}
+                </Link>
+              </div>
+            ) : null}
           </div>
         ) : checkMessage ? (
           <p className={`text-sm ${checkOk ? "text-green-700" : "text-red-600"}`}>
@@ -463,7 +552,12 @@ function AgendarBookingForm(props: {
             )}
           </Button>
           {isCurrentBookingConfirmed ? (
-            <Button type="button" variant="outline" className="w-full" onClick={props.onClose}>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full border-green-base/40 bg-white text-green-base hover:bg-green-base/10 hover:text-green-hover"
+              onClick={props.onClose}
+            >
               {t("agendar.booking.modal.text022")}</Button>
           ) : null}
         </div>
@@ -584,7 +678,7 @@ export function AgendarBookingModal(props: {
             <Button
               type="button"
               variant="outline"
-              className="w-full"
+              className="w-full border-green-base/40 bg-white text-green-base hover:bg-green-base/10 hover:text-green-hover"
               onClick={() => {
                 setData(null)
                 setLoadError(null)
