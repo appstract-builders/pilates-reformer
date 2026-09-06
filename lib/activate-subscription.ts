@@ -210,11 +210,9 @@ async function findUntouchedSubscriptions(
       isUnlimited: row.isUnlimited === true,
     })
 
-    // Con cupo contable basta comparar contra el cupo original.
+    // El contador y las reservas deben coincidir antes de anular un cobro.
     if (included != null) {
       if ((row.classesRemaining ?? 0) < included) continue
-      untouched.push(row.id)
-      continue
     }
 
     // Un plan sin cupo (ilimitado) no deja rastro en el contador: se mira si

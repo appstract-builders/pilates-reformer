@@ -8,6 +8,8 @@ build
 
 *.db
 *.sqlite
+scripts/_tmp*
+scripts/*.test.ts
 
 .git
 .gitignore

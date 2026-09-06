@@ -608,6 +608,7 @@ export async function markBookingTakenForUser(
       userId: schema.booking.userId,
       status: schema.booking.status,
       bookingDate: schema.booking.bookingDate,
+      slotId: schema.booking.scheduleSlotId,
       takenAt: schema.booking.takenAt,
       startTime: schema.scheduleSlot.startTime,
       className: schema.scheduleSlot.className,
@@ -637,10 +638,18 @@ export async function markBookingTakenForUser(
     return { ok: false, message: "Podrás marcarla cuando empiece la clase" }
   }
 
-  await db
+  const marked = await db
     .update(schema.booking)
     .set({ takenAt: now })
-    .where(eq(schema.booking.id, params.bookingId))
+    .where(and(
+      eq(schema.booking.id, params.bookingId),
+      eq(schema.booking.status, "confirmed"),
+      isNull(schema.booking.takenAt),
+      eq(schema.booking.scheduleSlotId, row.slotId),
+    ))
+    .returning({ id: schema.booking.id })
+
+  if (marked.length === 0) return { ok: false, message: "La reserva cambió. Actualiza el calendario." }
 
   return { ok: true, className: row.className, startTime: row.startTime }
 }
@@ -756,10 +765,26 @@ export async function cancelBookingById(
     restoreClass = true
   }
 
-  await db
+  const cancelled = await db
     .update(schema.booking)
     .set({ status: "cancelled", cancelledAt: new Date() })
-    .where(eq(schema.booking.id, bookingId))
+    .where(and(
+      eq(schema.booking.id, bookingId),
+      eq(schema.booking.status, "confirmed"),
+      isNull(schema.booking.takenAt),
+    ))
+    .returning({ id: schema.booking.id })
+
+  if (cancelled.length === 0) return { ok: false, message: "La reserva cambió. Actualiza el calendario." }
+
+  // Una clase individual nunca consumió saldo del plan: cancelarla no debe
+  // regalar una clase. Conservamos esta distinción incluso si ya fue pagada.
+  const [individualCharge] = await db
+    .select({ id: schema.payment.id })
+    .from(schema.payment)
+    .where(and(eq(schema.payment.bookingId, bookingId), isNull(schema.payment.subscriptionId)))
+    .limit(1)
+  if (individualCharge != null) restoreClass = false
 
   // La clase que no cubrió un plan dejó un adeudo abierto: al liberar el lugar
   // ese cobro tiene que morir con la reserva, o la alumna arrastra una deuda
