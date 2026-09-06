@@ -1,6 +1,7 @@
 import Image from "next/image"
 import Link from "next/link"
 import { headers } from "next/headers"
+import { redirect } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
 import { AgendarScreen } from "@/components/agendar-screen"
 import { AccountNavLink } from "@/components/features/site/account-nav-link"
@@ -25,6 +26,8 @@ export default async function AgendarPage({
       query: { disableRefresh: true },
     }),
   ])
+
+  if (params.slot && session?.user == null) redirect("/login")
 
   const logoSrc =
     branding.logoUrl != null && branding.logoUrl.trim() !== ""

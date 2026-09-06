@@ -12,7 +12,6 @@ import {
 } from "@/lib/site/routes";
 import ContentDetail from "@/components/content-detail";
 import SetupWeeklySchedule from "@/components/setup-weekly-schedule";
-import type { WeeklyClassSelection } from "@/components/setup-weekly-schedule";
 import HeroVideo from "@/components/hero-video";
 import AboutTeam from "@/components/about-team";
 import Image from "next/image";
@@ -20,6 +19,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { routes } from "@/lib/routes";
 import { AccountNavLink } from "@/components/features/site/account-nav-link";
+import type { LandingScheduleBoard } from "@/lib/site/schedule-board.server";
 import type { PublicPlan } from "@/lib/site/plans";
 import { useTranslation } from "@/lib/text/text-provider";
 
@@ -42,7 +42,13 @@ const stagger = {
   show: { transition: { staggerChildren: 0.12 } },
 };
 
-export function HomePage(props: { plans: PublicPlan[]; loggedIn?: boolean }) {
+export function HomePage(props: {
+  plans: PublicPlan[];
+  initialBoard: LandingScheduleBoard;
+  loggedIn?: boolean;
+  /** La cuenta ya redimió su clase muestra: no se le vuelve a ofrecer. */
+  trialUsed?: boolean;
+}) {
   const { t } = useTranslation();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -74,13 +80,7 @@ export function HomePage(props: { plans: PublicPlan[]; loggedIn?: boolean }) {
     { href: "#cobros", label: t("home.nav.payments") },
   ];
 
-  function goToAgendar(selection?: WeeklyClassSelection) {
-    if (selection != null) {
-      router.push(
-        `${routes.agendar}?date=${encodeURIComponent(selection.bookingDate)}&slot=${encodeURIComponent(selection.slotId)}`,
-      );
-      return;
-    }
+  function goToAgendar() {
     router.push(routes.agendar);
   }
 
@@ -302,7 +302,7 @@ export function HomePage(props: { plans: PublicPlan[]; loggedIn?: boolean }) {
             id="weekly"
             className="relative flex min-h-105 scroll-mt-40 flex-col gap-4 rounded-card border border-white/15 bg-white/10 p-5 text-white shadow-[0_25px_60px_rgba(27,26,24,0.18)] backdrop-blur sm:p-6 lg:min-h-[480px]"
           >
-            <SetupWeeklySchedule onSelectClass={goToAgendar} />
+            <SetupWeeklySchedule onSelectClass={goToAgendar} initialBoard={props.initialBoard} />
             {/* <a> plano como en el navbar: con <Link> la segunda vez la URL ya
                 es #planes y Next no vuelve a desplazar. */}
             <a
@@ -685,12 +685,14 @@ export function HomePage(props: { plans: PublicPlan[]; loggedIn?: boolean }) {
             <p>
               {t("home.page.text069")}<br /><br />
               {t("home.page.text070")}</p>
-            <motion.div variants={fadeUp} className="flex flex-wrap gap-4 justify-center">
-              <a
-              href={routes.agendar}
-              className="rounded-full bg-green-base px-4 py-3 text-sm font-semibold text-white transition hover:bg-green-hover shadow-lg shadow-green-base/20">
-                {t("home.page.text071")}</a>
-            </motion.div>
+            {props.trialUsed ? null : (
+              <motion.div variants={fadeUp} className="flex flex-wrap gap-4 justify-center">
+                <a
+                href={routes.agendar}
+                className="rounded-full bg-green-base px-4 py-3 text-sm font-semibold text-white transition hover:bg-green-hover shadow-lg shadow-green-base/20">
+                  {t("home.page.text071")}</a>
+              </motion.div>
+            )}
           </div>
         </div>
         <div className="border-t border-white/10">

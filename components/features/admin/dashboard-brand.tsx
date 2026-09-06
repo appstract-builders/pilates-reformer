@@ -1,6 +1,7 @@
 "use client"
 
 import Image from "next/image"
+import Link from "next/link"
 import { siteLogo } from "@/lib/site/routes"
 import { cn } from "@/lib/utils"
 
@@ -9,6 +10,8 @@ export function DashboardBrand(props: {
   logoUrl?: string | null
   subtitle?: string
   className?: string
+  /** Cuando se pasa, la marca se vuelve enlace. El login y el alta no lo usan. */
+  href?: string
 }) {
   const logoSrc =
     props.logoUrl != null && props.logoUrl.trim() !== ""
@@ -16,8 +19,8 @@ export function DashboardBrand(props: {
       : siteLogo
   const subtitle = props.subtitle ?? "Sistema de Reservas"
 
-  return (
-    <div className={cn("flex items-center gap-3", props.className)}>
+  const content = (
+    <>
       <div
         className="relative h-12 w-12 shrink-0 rounded-full p-5 bg-white overflow-hidden"
         style={{
@@ -43,6 +46,24 @@ export function DashboardBrand(props: {
         <p className="truncate text-sm font-semibold leading-tight">{props.studioName}</p>
         <p className="text-xs text-muted-foreground">{subtitle}</p>
       </div>
-    </div>
+    </>
   )
+
+  const classes = cn("flex items-center gap-3", props.className)
+
+  if (props.href != null) {
+    return (
+      <Link
+        href={props.href}
+        className={cn(
+          classes,
+          "rounded-md transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        )}
+      >
+        {content}
+      </Link>
+    )
+  }
+
+  return <div className={classes}>{content}</div>
 }

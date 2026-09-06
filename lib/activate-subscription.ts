@@ -1,14 +1,16 @@
 import type { AnyDb } from "@/lib/db"
 import * as schema from "@/lib/db/schema"
-import { and, eq } from "drizzle-orm"
+import { and, eq, gte, lte } from "drizzle-orm"
 import {
   computeSubscriptionEndDate,
+  subscriptionEndOfDay,
   toSubscriptionLocalDate,
 } from "@/lib/subscription-dates"
 import { incrementCouponUsedCount, resolveCouponForPrice } from "@/lib/coupons"
 import { isSubscriptionCurrent, pickPrimarySubscription } from "@/lib/subscription-display"
 import { voidPendingPaymentsForSubscriptions } from "@/lib/payment-cancellation"
 import { createNotification } from "@/lib/notifications"
+import { planCostPerClass, planIncludedClasses } from "@/lib/plan-quota"
 
 export async function activateSubscriptionForUser(
   db: AnyDb,
@@ -57,13 +59,13 @@ export async function activateSubscriptionForUser(
     couponIdToIncrement = resolved.coupon.id
   }
 
-  const costPerClass =
-    selectedPlan.totalClasses != null && selectedPlan.totalClasses > 0
-      ? finalPrice / selectedPlan.totalClasses
-      : null
+  // Un plan mensual no trae `totalClasses`: su cupo sale de los días por semana
+  // por las semanas que dura. Antes se guardaba `classesRemaining` en NULL y el
+  // plan acababa sin tope de ningún tipo.
+  const costPerClass = planCostPerClass(selectedPlan, finalPrice)
 
   const isUnlimited = selectedPlan.isUnlimited ?? false
-  const classesRemaining = isUnlimited ? null : (selectedPlan.totalClasses ?? null)
+  const classesRemaining = planIncludedClasses(selectedPlan)
 
   const billingCycle = params.billingCycle ?? "mensual"
   const subId = crypto.randomUUID()
@@ -166,6 +168,81 @@ export async function cancelActiveSubscriptionsForUser(
   return closed.map((row) => row.id)
 }
 
+/**
+ * Suscripciones cerradas de las que la alumna no alcanzó a usar nada: mismo
+ * cupo con el que nacieron y sin reservas dentro del periodo. Su cobro
+ * pendiente es un error de captura, no una venta, y por eso se puede anular.
+ *
+ * Se mide antes de cerrarlas, porque cerrarlas pone `classesRemaining` en 0.
+ */
+async function findUntouchedSubscriptions(
+  db: AnyDb,
+  userId: string,
+): Promise<string[]> {
+  const rows = await db
+    .select({
+      id: schema.subscription.id,
+      startDate: schema.subscription.startDate,
+      endDate: schema.subscription.endDate,
+      classesRemaining: schema.subscription.classesRemaining,
+      isUnlimited: schema.subscription.isUnlimited,
+      planType: schema.plan.planType,
+      daysPerWeek: schema.plan.daysPerWeek,
+      totalClasses: schema.plan.totalClasses,
+      durationDays: schema.plan.durationDays,
+    })
+    .from(schema.subscription)
+    .innerJoin(schema.plan, eq(schema.subscription.planId, schema.plan.id))
+    .where(
+      and(
+        eq(schema.subscription.userId, userId),
+        eq(schema.subscription.status, "active"),
+      ),
+    )
+
+  const untouched: string[] = []
+  for (const row of rows) {
+    const included = planIncludedClasses({
+      planType: row.planType,
+      daysPerWeek: row.daysPerWeek,
+      totalClasses: row.totalClasses,
+      durationDays: row.durationDays,
+      isUnlimited: row.isUnlimited === true,
+    })
+
+    // Con cupo contable basta comparar contra el cupo original.
+    if (included != null) {
+      if ((row.classesRemaining ?? 0) < included) continue
+      untouched.push(row.id)
+      continue
+    }
+
+    // Un plan sin cupo (ilimitado) no deja rastro en el contador: se mira si
+    // hubo reservas dentro del periodo.
+    const start = toSubscriptionLocalDate(
+      row.startDate instanceof Date ? row.startDate : new Date(row.startDate as unknown as number),
+    )
+    const end = subscriptionEndOfDay(
+      row.endDate instanceof Date ? row.endDate : new Date(row.endDate as unknown as number),
+    )
+    const taken = await db
+      .select({ id: schema.booking.id })
+      .from(schema.booking)
+      .where(
+        and(
+          eq(schema.booking.userId, userId),
+          eq(schema.booking.status, "confirmed"),
+          gte(schema.booking.bookingDate, start),
+          lte(schema.booking.bookingDate, end),
+        ),
+      )
+      .limit(1)
+    if (taken.length === 0) untouched.push(row.id)
+  }
+
+  return untouched
+}
+
 export async function applyUserPlan(
   db: AnyDb,
   params: {
@@ -228,8 +305,36 @@ export async function applyUserPlan(
   }
 
   if (active != null) {
-    // Cambio de plan: se cierra el anterior, pero su adeudo sigue vivo.
-    await cancelActiveSubscriptionsForUser(db, params.userId)
+    // Cambio de plan: se cierra el anterior. Su adeudo sigue vivo si alcanzó a
+    // usarlo -esas clases se dieron y se cobran-, pero si no consumió nada el
+    // cobro pendiente se anula: fue una corrección del plan, no una venta, y
+    // dejarlo vivo le facturaba a la alumna dos planes por el mismo periodo.
+    const untouched = await findUntouchedSubscriptions(db, params.userId)
+    const closed = await cancelActiveSubscriptionsForUser(db, params.userId)
+    const toVoid = closed.filter((id) => untouched.includes(id))
+
+    if (toVoid.length > 0) {
+      const voided = await voidPendingPaymentsForSubscriptions(db, {
+        subscriptionIds: toVoid,
+        actor: params.actor ?? "sistema",
+        reason: "Se cambió el plan antes de usarlo",
+      })
+
+      if (voided.voidedAmount > 0) {
+        const [user] = await db
+          .select({ name: schema.user.name })
+          .from(schema.user)
+          .where(eq(schema.user.id, params.userId))
+          .limit(1)
+
+        await createNotification(db, {
+          userId: params.userId,
+          type: "payment_cancelled",
+          title: "Cambio de plan",
+          body: `Hola ${user?.name ?? "Usuario"}, cambiamos tu plan antes de que lo usaras, así que cancelamos su cobro de ${new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(voided.voidedAmount)}. Sólo se te cobrará el plan nuevo.`,
+        })
+      }
+    }
   }
 
   return activateSubscriptionForUser(db, {

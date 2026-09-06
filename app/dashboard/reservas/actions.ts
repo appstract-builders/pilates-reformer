@@ -164,6 +164,8 @@ export async function checkBookingEligibilityAction(
   alumnaName?: string
   /** Importe que se cargará por no tener plan vigente. */
   willBeCharged?: number
+  /** Aviso del plan: clases de un periodo vencido que hay que cuadrar. */
+  planWarning?: string
 }> {
   const db = getDb()
   const alumna = await findUserByDisplayId(db, displayId)
@@ -229,7 +231,7 @@ export async function checkBookingEligibilityAction(
   }
 
   // Sin plan vigente igual se puede reservar: la clase queda como adeudo.
-  const subCheck = await checkBookableSubscriptionForUser(db, alumna.id)
+  const subCheck = await checkBookableSubscriptionForUser(db, alumna.id, bookingDate)
   if (!subCheck.ok) {
     const plan = await getIndividualClassPlan(db)
     return {
@@ -239,7 +241,7 @@ export async function checkBookingEligibilityAction(
     }
   }
 
-  return { ok: true, alumnaName: alumna.name }
+  return { ok: true, alumnaName: alumna.name, planWarning: subCheck.warning }
 }
 
 export async function cancelBookingAction(

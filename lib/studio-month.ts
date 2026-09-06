@@ -64,7 +64,8 @@ export function studioLocalDateTimeToInstant(
 
   for (let t = lo; t <= hi + 60_000; t += 60_000) {
     if (studioWallClockKey(studioWallClock(new Date(t))) === targetKey) {
-      return new Date(t)
+      // La búsqueda puede caer a mitad del minuto; el horario inicia en :00.
+      return new Date(Math.floor(t / 60_000) * 60_000)
     }
   }
 

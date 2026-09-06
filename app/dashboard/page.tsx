@@ -1,8 +1,19 @@
 export const dynamic = "force-dynamic"
 
+import { headers } from "next/headers"
+import { redirect } from "next/navigation"
 import { getDb } from "@/lib/db"
 import * as schema from "@/lib/db/schema"
 import { eq, gte, lte, and, sql } from "drizzle-orm"
+import { auth } from "@/lib/auth"
+import { loadNavPermissions } from "@/lib/nav-permissions.server"
+import {
+  canAccessDashboardPath,
+  getFirstAllowedDashboardUrl,
+  hasNoNavAccess,
+} from "@/lib/nav-permissions"
+import { routes } from "@/lib/routes"
+import { NoAccessPanel } from "@/components/features/admin/no-access-panel"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/shared/ui/card"
 import { Badge } from "@/components/shared/ui/badge"
 import { Users, Calendar, BookOpen, DollarSign } from "lucide-react"
@@ -13,6 +24,29 @@ import { formatTime12h } from "@/lib/time-utils"
 const DAY_NAMES = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"]
 
 export default async function DashboardPage() {
+  // El reparto por rol vive aquí y no en el layout: redirigir desde el layout
+  // compartido deja al router de Next pidiendo el mismo RSC en bucle y la
+  // pantalla en blanco. Desde una page la redirección sí se resuelve bien.
+  const session = await auth.api.getSession({
+    headers: await headers(),
+    query: { disableRefresh: true },
+  })
+  const role = typeof session?.user?.role === "string" ? session.user.role : "alumno"
+  const navPermissions = await loadNavPermissions()
+
+  if (!canAccessDashboardPath(role, routes.dashboard, navPermissions)) {
+    const landing = getFirstAllowedDashboardUrl(role, navPermissions)
+    if (
+      !hasNoNavAccess(role, navPermissions) &&
+      landing !== routes.dashboard &&
+      canAccessDashboardPath(role, landing, navPermissions)
+    ) {
+      redirect(landing)
+    }
+    // Sin ningún destino que le toque: el aviso, no una redirección al vacío.
+    return <NoAccessPanel />
+  }
+
   const db = getDb()
   const now = new Date()
 

@@ -2,7 +2,8 @@
 
 import { startTransition, useActionState, useEffect, useState } from "react"
 import Link from "next/link"
-import { CircleCheck, Eye, EyeOff } from "lucide-react"
+import { CircleCheck } from "lucide-react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/shared/ui/button"
 import { Input } from "@/components/shared/ui/input"
 import { Label } from "@/components/shared/ui/label"
@@ -15,7 +16,7 @@ import {
 } from "@/components/shared/ui/dialog"
 import { DbActionSuccessEffect } from "@/components/features/admin/db-action-feedback"
 import { authClient } from "@/lib/auth-client"
-import { signInByDisplayId } from "@/lib/sign-in-by-display-id"
+import { formatTime12h } from "@/lib/time-utils"
 import {
   type BookingSlotOption,
   filterSlotsForBookingDate,
@@ -27,7 +28,9 @@ import {
 } from "@/lib/booking-slot-options"
 import {
   checkPublicBookingEligibility,
+  cancelOwnBookingAction,
   createPublicBookingAction,
+  markBookingTakenAction,
   loadAgendarDataAction,
   loadDayAvailabilityAction,
   type ActivePlanSummary,
@@ -55,19 +58,6 @@ function formatPlanDate(dateStr: string): string {
   })
 }
 
-async function waitForSessionUser() {
-  for (let i = 0; i < 40; i++) {
-    const s = await authClient.getSession()
-    if (s.data?.user != null) {
-      return s.data.user
-    }
-    await new Promise<void>((resolve) => {
-      window.setTimeout(resolve, 150)
-    })
-  }
-  return null
-}
-
 function AgendarBookingForm(props: {
   slots: BookingSlotOption[]
   defaultDate: string
@@ -80,6 +70,7 @@ function AgendarBookingForm(props: {
   onBooked?: () => void
 }) {
   const { t } = useTranslation()
+  const router = useRouter()
   const [state, formAction, pending] = useActionState<PublicBookingState, FormData>(
     createPublicBookingAction,
     { success: false },
@@ -95,12 +86,6 @@ function AgendarBookingForm(props: {
   )
   const [checkMessage, setCheckMessage] = useState<string | null>(null)
   const [checkOk, setCheckOk] = useState<boolean | null>(null)
-  const [loginOpen, setLoginOpen] = useState(false)
-  const [loginDisplayId, setLoginDisplayId] = useState("")
-  const [loginPassword, setLoginPassword] = useState("")
-  const [loginPasswordVisible, setLoginPasswordVisible] = useState(false)
-  const [loginError, setLoginError] = useState<string | null>(null)
-  const [loginPending, setLoginPending] = useState(false)
   const [confirmedBooking, setConfirmedBooking] = useState<{
     date: string
     slotId: string
@@ -109,10 +94,33 @@ function AgendarBookingForm(props: {
   const [willBeCharged, setWillBeCharged] = useState<{
     priceMxn: number
     planName: string
+    weeklyLimitReached?: boolean
   } | null>(null)
   const [trialAvailable, setTrialAvailable] = useState(false)
   const [useTrialClass, setUseTrialClass] = useState(false)
   const [activePlan, setActivePlan] = useState<ActivePlanSummary | null>(null)
+  const [planWarning, setPlanWarning] = useState<string | null>(null)
+  // Otra clase el mismo día: se confirma una vez y sólo para esa fecha/horario.
+  // Ambos estados guardan A CUÁL reserva aplican en vez de un booleano, así la
+  // confirmación caduca sola al cambiar de fecha u horario y no hace falta un
+  // efecto que los reinicie.
+  const [sameDayBooking, setSameDayBooking] = useState<{
+    startTime: string
+    className: string
+  } | null>(null)
+  // La celda elegida es su propia reserva: se ofrece liberarla.
+  const [ownBooking, setOwnBooking] = useState<{
+    bookingId: string
+    startTime: string
+    className: string
+    taken: boolean
+    canMarkTaken: boolean
+  } | null>(null)
+  const [releasing, setReleasing] = useState(false)
+  const [taking, setTaking] = useState(false)
+  const [eligibilityRefresh, setEligibilityRefresh] = useState(0)
+  const [sameDayPromptFor, setSameDayPromptFor] = useState<string | null>(null)
+  const [sameDayAcceptedFor, setSameDayAcceptedFor] = useState<string | null>(null)
   const [suggestedPlans, setSuggestedPlans] = useState<SuggestedPlan[]>([])
   // Cupo real de la fecha elegida; se recarga al cambiarla y tras reservar.
   const [dayBooked, setDayBooked] = useState<Record<string, number> | null>(null)
@@ -174,7 +182,8 @@ function AgendarBookingForm(props: {
 
   useEffect(() => {
     if (!scheduleSlotId) return
-    const valid = slotsForDay.some((s) => s.id === scheduleSlotId && s.free > 0)
+    // El cupo lleno no invalida una selección: puede ser su propia reserva.
+    const valid = slotsForDay.some((s) => s.id === scheduleSlotId)
     if (!valid) {
       setScheduleSlotId("")
     }
@@ -186,7 +195,6 @@ function AgendarBookingForm(props: {
       const confirmedDate = state.bookedDate ?? bookingDate
       setCheckMessage(state.message)
       setCheckOk(true)
-      setLoginOpen(false)
       setConfirmedBooking({
         date: confirmedDate,
         slotId: scheduleSlotId,
@@ -209,6 +217,9 @@ function AgendarBookingForm(props: {
       setTrialAvailable(false)
       setUseTrialClass(false)
       setActivePlan(null)
+      setPlanWarning(null)
+      setSameDayBooking(null)
+      setOwnBooking(null)
       setSuggestedPlans([])
       return
     }
@@ -221,6 +232,9 @@ function AgendarBookingForm(props: {
         if (cancelled) return
         setWillBeCharged(res.ok ? (res.willBeCharged ?? null) : null)
         setActivePlan(res.ok ? (res.activePlan ?? null) : null)
+        setPlanWarning(res.ok ? (res.planWarning ?? null) : null)
+        setSameDayBooking(res.ok ? (res.sameDayBooking ?? null) : null)
+        setOwnBooking(res.ownBooking ?? null)
         setSuggestedPlans(res.ok ? (res.suggestedPlans ?? []) : [])
         // La clase muestra viene marcada por defecto: es gratis y de una sola vez.
         const trial = res.ok && res.trialAvailable === true
@@ -232,7 +246,9 @@ function AgendarBookingForm(props: {
             ? res.alumnaName
               ? t("booking.canBookName", { name: res.alumnaName })
               : t("booking.available")
-            : (res.message ?? t("booking.unavailable")),
+            : res.ownBooking != null
+              ? null
+              : (res.message ?? t("booking.unavailable")),
         )
       })
     }, 400)
@@ -240,16 +256,32 @@ function AgendarBookingForm(props: {
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [sessionUser, scheduleSlotId, bookingDate, isCurrentBookingConfirmed])
+  }, [sessionUser, scheduleSlotId, bookingDate, isCurrentBookingConfirmed, eligibilityRefresh])
 
-  function submitBooking() {
+  useEffect(() => {
+    if (ownBooking == null || ownBooking.taken || ownBooking.canMarkTaken) return
+    const timer = window.setInterval(() => setEligibilityRefresh((value) => value + 1), 15_000)
+    return () => window.clearInterval(timer)
+  }, [ownBooking])
+
+
+
+  const sameDayKey = `${bookingDate}|${scheduleSlotId}`
+  const sameDayPrompt = sameDayPromptFor === sameDayKey
+  const sameDayAccepted = sameDayAcceptedFor === sameDayKey
+
+  function submitBooking(options?: { changeSameDay?: boolean }) {
     if (isCurrentBookingConfirmed) return
     if (bookingDate === "" || scheduleSlotId === "") return
     const fd = new FormData()
     fd.set("bookingDate", bookingDate)
     fd.set("scheduleSlotId", scheduleSlotId)
-    if (trialAvailable && useTrialClass) {
+    if (options?.changeSameDay === true) {
+      fd.set("changeSameDay", "true")
+    } else if (trialAvailable && useTrialClass) {
       fd.set("useTrialClass", "true")
+    } else if (willBeCharged != null) {
+      fd.set("acceptIndividualClass", "true")
     }
     // useActionState exige transición cuando no se invoca desde `action`.
     startTransition(() => {
@@ -257,49 +289,54 @@ function AgendarBookingForm(props: {
     })
   }
 
-  async function handleLoginSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setLoginError(null)
-    setLoginPending(true)
-
-    const signIn = await signInByDisplayId(loginDisplayId, loginPassword)
-
-    if (!signIn.ok) {
-      setLoginPending(false)
-      setLoginError(signIn.error)
+  async function releaseOwnBooking() {
+    if (ownBooking == null || releasing) return
+    setReleasing(true)
+    const res = await cancelOwnBookingAction(ownBooking.bookingId)
+    setReleasing(false)
+    if (!res.success) {
+      setCheckMessage(res.error ?? t("booking.unavailable"))
+      setCheckOk(false)
       return
     }
+    setOwnBooking(null)
+    setCheckMessage(res.message ?? null)
+    setCheckOk(true)
+    onBooked?.()
+    props.onClose()
+  }
 
-    const user = await waitForSessionUser()
-    if (user == null) {
-      setLoginPending(false)
-      setLoginError(t("booking.connectionError"))
-      return
+  async function takeOwnBooking() {
+    if (ownBooking == null || taking || releasing) return
+    setTaking(true)
+    try {
+      const res = await markBookingTakenAction(ownBooking.bookingId)
+      if (!res.success) {
+        setCheckMessage(res.error ?? t("booking.unavailable"))
+        setCheckOk(false)
+        return
+      }
+      setOwnBooking({ ...ownBooking, taken: true, canMarkTaken: false })
+      setCheckMessage(res.message ?? null)
+      setCheckOk(true)
+      onBooked?.()
+    } catch {
+      setCheckMessage("No se pudo guardar la clase. Intenta de nuevo.")
+      setCheckOk(false)
+    } finally {
+      setTaking(false)
     }
-
-    const enabled = (user as { enabled?: boolean }).enabled
-    if (enabled === false) {
-      await authClient.signOut()
-      setLoginPending(false)
-      setLoginError(t("booking.accountDisabled"))
-      return
-    }
-
-    setLoginPending(false)
-    setLoginOpen(false)
-    setLoginDisplayId("")
-    setLoginPassword("")
-    await new Promise<void>((resolve) => {
-      window.setTimeout(resolve, 400)
-    })
-    submitBooking()
   }
 
   function handleFormSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (isCurrentBookingConfirmed) return
     if (sessionUser == null) {
-      setLoginOpen(true)
+      router.push(routes.login)
+      return
+    }
+    if (sameDayBooking != null && !sameDayAccepted) {
+      setSameDayPromptFor(sameDayKey)
       return
     }
     void submitBooking()
@@ -419,17 +456,21 @@ function AgendarBookingForm(props: {
             <p className="font-medium text-green-base">{t("booking.planActiveTitle")}</p>
             <p className="font-semibold text-[#1b1a18]">{activePlan.name}</p>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-black/60">
-              <span>
-                {activePlan.daysLeft === 0
-                  ? t("booking.planExpiresToday", { date: formatPlanDate(activePlan.endDate) })
-                  : activePlan.daysLeft === 1
-                    ? t("booking.planExpiresTomorrow", { date: formatPlanDate(activePlan.endDate) })
-                    : t("booking.planExpiresIn", {
-                        days: activePlan.daysLeft,
-                        date: formatPlanDate(activePlan.endDate),
-                      })}
-              </span>
-              <span aria-hidden>·</span>
+              {activePlan.expired ? null : (
+                <>
+                  <span>
+                    {activePlan.daysLeft === 0
+                      ? t("booking.planExpiresToday", { date: formatPlanDate(activePlan.endDate) })
+                      : activePlan.daysLeft === 1
+                        ? t("booking.planExpiresTomorrow", { date: formatPlanDate(activePlan.endDate) })
+                        : t("booking.planExpiresIn", {
+                            days: activePlan.daysLeft,
+                            date: formatPlanDate(activePlan.endDate),
+                          })}
+                  </span>
+                  <span aria-hidden>·</span>
+                </>
+              )}
               <span>
                 {activePlan.classesRemaining != null
                   ? activePlan.classesRemaining === 1
@@ -441,9 +482,23 @@ function AgendarBookingForm(props: {
                       ? t("booking.planDaysPerWeek", { count: activePlan.daysPerWeek })
                       : t("booking.planActive")}
               </span>
+              {activePlan.classesRemaining != null && activePlan.daysPerWeek != null ? (
+                <>
+                  <span aria-hidden>·</span>
+                  <span>{t("booking.planDaysPerWeek", { count: activePlan.daysPerWeek })}</span>
+                </>
+              ) : null}
             </div>
+            {planWarning != null ? (
+              <p className="mt-2 rounded-inner border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+                {planWarning}
+              </p>
+            ) : null}
             {/* Barra de vigencia: 30 días es el ciclo típico del estudio. */}
-            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-green-base/15">
+            <div
+              className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-green-base/15"
+              hidden={activePlan.expired}
+            >
               <div
                 className="h-full rounded-full bg-green-base transition-all"
                 style={{
@@ -452,9 +507,13 @@ function AgendarBookingForm(props: {
               />
             </div>
           </div>
-        ) : willBeCharged != null && sessionUser != null && scheduleSlotId !== "" ? (
+        ) : sameDayBooking == null && willBeCharged != null && sessionUser != null && scheduleSlotId !== "" ? (
           <div className="space-y-3 rounded-inner border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-            <p className="font-medium">{t("agendar.booking.modal.text013")}</p>
+            <p className="font-medium">
+              {willBeCharged.weeklyLimitReached
+                ? "Alcanzaste el límite semanal de tu plan. Puedes comprar una clase individual adicional; no se descontará de tu plan."
+                : t("agendar.booking.modal.text013")}
+            </p>
             {trialAvailable ? (
               <>
                 <div className="space-y-2">
@@ -530,7 +589,102 @@ function AgendarBookingForm(props: {
         {!isCurrentBookingConfirmed && !canSubmit && bookingDate !== "" && slotsForDay.length === 0 ? null : !isCurrentBookingConfirmed && !canSubmit ? (
           <p className="text-sm text-black/60">{t("agendar.booking.modal.text020")}</p>
         ) : null}
-        <div className="flex flex-col gap-2 sm:flex-row">
+        {ownBooking != null && !isCurrentBookingConfirmed ? (
+          <div className="space-y-3 rounded-inner border border-green-base/30 bg-green-base/5 px-4 py-3 text-sm">
+            <p className="font-semibold text-green-base">{t("booking.ownBookingTitle")}</p>
+            <p className="text-[#1b1a18]">
+              {ownBooking.taken
+                ? t("booking.ownBookingTaken")
+                : t("booking.ownBookingBody", {
+                    date: formatBookingDateEs(bookingDate),
+                    time: formatTime12h(ownBooking.startTime),
+                  })}
+            </p>
+            {ownBooking.taken ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full bg-white"
+                onClick={props.onClose}
+              >
+                {t("agendar.booking.modal.text022")}
+              </Button>
+            ) : (
+              <>
+                {ownBooking.canMarkTaken ? (
+                  <Button
+                    type="button"
+                    className="w-full bg-green-base hover:bg-green-hover"
+                    disabled={taking || releasing}
+                    onClick={() => void takeOwnBooking()}
+                  >
+                    {taking ? "Guardando..." : t("booking.ownBookingTake")}
+                  </Button>
+                ) : (
+                  <p className="text-xs text-black/55">
+                    {t("booking.ownBookingTakeLater")}
+                  </p>
+                )}
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full border-red-300 bg-white text-red-700 hover:bg-red-50 hover:text-red-800"
+                    disabled={releasing || taking}
+                    onClick={() => void releaseOwnBooking()}
+                  >
+                    {releasing ? "Liberando..." : t("booking.ownBookingRelease")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full bg-white"
+                    disabled={releasing || taking}
+                    onClick={props.onClose}
+                  >
+                    {t("booking.ownBookingKeep")}
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        ) : null}
+        {sameDayPrompt && !isCurrentBookingConfirmed ? (
+          <div className="space-y-3 rounded-inner border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+            <p className="font-semibold">{t("booking.sameDayTitle")}</p>
+            <p>
+              {t("booking.sameDayBody", {
+                date: formatBookingDateEs(bookingDate),
+                time: formatTime12h(sameDayBooking?.startTime ?? ""),
+              })}
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Button
+                type="button"
+                className="w-full bg-green-base hover:bg-green-hover"
+                onClick={() => {
+                  setSameDayAcceptedFor(sameDayKey)
+                  setSameDayPromptFor(null)
+                  void submitBooking({ changeSameDay: true })
+                }}
+              >
+                {t("booking.sameDayConfirm")}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full bg-white"
+                onClick={() => setSameDayPromptFor(null)}
+              >
+                {t("booking.sameDayCancel")}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+        <div
+          className={`grid gap-2 ${isCurrentBookingConfirmed ? "sm:grid-cols-2" : ""}`}
+          hidden={(sameDayPrompt || ownBooking != null) && !isCurrentBookingConfirmed}
+        >
           <Button
             type="submit"
             className="w-full gap-2 bg-green-base hover:bg-green-hover"
@@ -545,8 +699,12 @@ function AgendarBookingForm(props: {
               <>
                 <CircleCheck className="h-4 w-4" />
                 {t("agendar.booking.modal.text021")}</>
+            ) : sessionUser == null ? (
+              "Iniciar sesión para reservar"
             ) : pending ? (
               "Guardando..."
+            ) : willBeCharged?.weeklyLimitReached ? (
+              `Comprar clase individual · ${formatMxn(willBeCharged.priceMxn)}`
             ) : (
               t("booking.confirm")
             )}
@@ -563,67 +721,7 @@ function AgendarBookingForm(props: {
         </div>
       </form>
 
-      <Dialog open={loginOpen} onOpenChange={setLoginOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{t("agendar.booking.modal.text023")}</DialogTitle>
-            <DialogDescription>
-              {t("agendar.booking.modal.text024")}</DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleLoginSubmit} className="space-y-4">
-            {loginError ? <p className="text-sm text-red-600">{loginError}</p> : null}
-            <div className="space-y-2">
-              <Label htmlFor="agendar-login-displayId">{t("agendar.booking.modal.text025")}</Label>
-              <Input
-                id="agendar-login-displayId"
-                type="text"
-                autoComplete="username"
-                value={loginDisplayId}
-                onChange={(e) => setLoginDisplayId(e.target.value.toUpperCase())}
-                required
-                disabled={loginPending}
-                className="font-mono uppercase"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="agendar-login-password">{t("agendar.booking.modal.text026")}</Label>
-              <div className="relative">
-                <Input
-                  id="agendar-login-password"
-                  type={loginPasswordVisible ? "text" : "password"}
-                  autoComplete="current-password"
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
-                  required
-                  disabled={loginPending}
-                  className="pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setLoginPasswordVisible(!loginPasswordVisible)}
-                  className="absolute right-0 top-0 flex h-full w-10 items-center justify-center text-muted-foreground hover:text-foreground"
-                  aria-label={loginPasswordVisible ? t("booking.hidePassword") : t("booking.showPassword")}
-                  disabled={loginPending}
-                >
-                  {loginPasswordVisible ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
-                </button>
-              </div>
-            </div>
-            <Button type="submit" className="w-full bg-green-base hover:bg-green-hover" disabled={loginPending}>
-              {loginPending ? t("booking.loggingIn") : t("booking.loginAndConfirm")}
-            </Button>
-            <p className="text-center text-xs text-black/60">
-              {t("agendar.booking.modal.text027")}{" "}
-              <Link href={routes.registry} className="text-green-base underline underline-offset-4">
-                {t("agendar.booking.modal.text028")}</Link>
-            </p>
-          </form>
-        </DialogContent>
-      </Dialog>
+
     </>
   )
 }

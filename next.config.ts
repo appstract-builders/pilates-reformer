@@ -2,6 +2,9 @@ import type { NextConfig } from "next"
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // Next 16 escribe AGENTS.md y CLAUDE.md en la raiz al levantar el dev server.
+  // Este repo no los usa y sólo aparecen como archivos sin rastrear.
+  agentRules: false,
   serverExternalPackages: ["better-sqlite3", "@neondatabase/serverless", "postgres", "nodemailer"],
   // Next arrastra sharp y sus binarios de plataforma (@img) por si hay que
   // optimizar imagenes. Con unoptimized nadie los carga, y son ~18 MB del

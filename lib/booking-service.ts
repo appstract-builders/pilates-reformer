@@ -1,9 +1,10 @@
 import type { AnyDb } from "@/lib/db"
 import * as schema from "@/lib/db/schema"
-import { and, eq, gte, lte } from "drizzle-orm"
+import { and, asc, eq, gte, isNull, lt, lte } from "drizzle-orm"
 import { dateRangeForDay, toLocalDateStr } from "@/lib/booking-slot-options"
 import {
   evaluateStudentSelfRelease,
+  startOfStudioWeek,
   validateBookingAgeForSlot,
 } from "@/lib/booking-rules"
 import {
@@ -21,6 +22,7 @@ import {
 } from "@/lib/subscription-display"
 import { isSlotDisabledOnDate } from "@/lib/slot-exceptions"
 import { voidPendingChargeForBooking } from "@/lib/class-charge"
+import { planWeeklyLimit } from "@/lib/plan-quota"
 
 export type CreateBookingResult =
   | {
@@ -29,6 +31,8 @@ export type CreateBookingResult =
       userName: string
       /** false cuando no había plan vigente y la clase queda por cobrar. */
       coveredByPlan: boolean
+      /** Aviso del plan que la cubrió, p. ej. clases de un periodo vencido. */
+      planWarning?: string
     }
   | { ok: false; message: string }
 
@@ -117,17 +121,54 @@ export async function checkSlotCapacityForBooking(
 }
 
 export type BookableSubscriptionCheck =
-  | { ok: true; subscriptionId: string }
+  | {
+      ok: true
+      subscriptionId: string
+      /** El plan cubre la clase, pero la alumna tiene que saber algo antes. */
+      warning?: string
+    }
   | {
       ok: false
       message: string
-      reason?: "no_subscription" | "expired" | "no_classes"
+      reason?: "no_subscription" | "expired" | "no_classes" | "weekly_limit"
       subscriptionId?: string
     }
+
+/**
+ * Reservas confirmadas de la alumna dentro de la semana del estudio (lunes a
+ * domingo) en la que cae `bookingDate`. Es lo que topa `daysPerWeek`.
+ */
+export async function countConfirmedBookingsInStudioWeek(
+  db: AnyDb,
+  userId: string,
+  bookingDate: Date,
+): Promise<number> {
+  const weekStart = startOfStudioWeek(bookingDate)
+  const weekEnd = new Date(weekStart)
+  weekEnd.setDate(weekEnd.getDate() + 7)
+
+  const rows = await db
+    .select({ id: schema.booking.id })
+    .from(schema.booking)
+    .where(
+      and(
+        eq(schema.booking.userId, userId),
+        eq(schema.booking.status, "confirmed"),
+        gte(schema.booking.bookingDate, weekStart),
+        lt(schema.booking.bookingDate, weekEnd),
+      ),
+    )
+  return rows.length
+}
+
+function formatShortDate(d: Date): string {
+  return d.toLocaleDateString("es-MX", { day: "numeric", month: "long" })
+}
 
 export async function checkBookableSubscriptionForUser(
   db: AnyDb,
   userId: string,
+  bookingDate?: Date,
 ): Promise<BookableSubscriptionCheck> {
   const subs = await db
     .select({
@@ -138,6 +179,7 @@ export async function checkBookableSubscriptionForUser(
       isUnlimited: schema.subscription.isUnlimited,
       classesRemaining: schema.subscription.classesRemaining,
       planType: schema.plan.planType,
+      daysPerWeek: schema.plan.daysPerWeek,
     })
     .from(schema.subscription)
     .innerJoin(schema.plan, eq(schema.subscription.planId, schema.plan.id))
@@ -157,32 +199,56 @@ export async function checkBookableSubscriptionForUser(
     }
   }
 
+  const remaining = primary.isUnlimited ? null : (primary.classesRemaining ?? 0)
+  let warning: string | undefined
+
   if (!isSubscriptionCurrent(primary.status, primary.endDate)) {
+    // Las clases que ya pagó no se pierden porque el periodo se venza: se dejan
+    // tomar, pero avisando, porque el estudio tiene que cuadrarlas al renovar.
+    if (remaining == null || remaining <= 0) {
+      return {
+        ok: false,
+        message: "Tu plan ya venció. Renuévalo para que las clases se descuenten de él.",
+        reason: "expired",
+        subscriptionId: primary.id,
+      }
+    }
+    const endDate =
+      primary.endDate instanceof Date
+        ? primary.endDate
+        : new Date(primary.endDate as unknown as number)
+    warning =
+      `Tu plan venció el ${formatShortDate(endDate)} y te ${remaining === 1 ? "queda 1 clase" : `quedan ${remaining} clases`} sin tomar. ` +
+      "Puedes usarlas, pero coordina con el estudio para que las tomen en cuenta al renovar."
+  }
+
+  if (remaining != null && remaining <= 0) {
     return {
       ok: false,
-      message: "Tu plan ya venció. Renuévalo para que las clases se descuenten de él.",
-      reason: "expired",
+      message: "Ya usaste las clases de tu plan actual.",
+      reason: "no_classes",
+      subscriptionId: primary.id,
     }
   }
 
-  if (primary.isUnlimited) {
-    return { ok: true, subscriptionId: primary.id }
+  // El tope semanal es lo que hace que una quincenal de 3 por semana no se
+  // tome sus 6 clases en una sola semana.
+  const weeklyLimit = planWeeklyLimit(primary)
+  if (weeklyLimit != null && bookingDate != null) {
+    const usedThisWeek = await countConfirmedBookingsInStudioWeek(db, userId, bookingDate)
+    if (usedThisWeek >= weeklyLimit) {
+      return {
+        ok: false,
+        message:
+          `Tu plan incluye ${weeklyLimit} ${weeklyLimit === 1 ? "clase" : "clases"} por semana y ya alcanzaste ese límite entre reservas y clases tomadas. ` +
+          "Para cualquier situación, acude con un administrador.",
+        reason: "weekly_limit",
+        subscriptionId: primary.id,
+      }
+    }
   }
 
-  if (primary.planType === "monthly") {
-    return { ok: true, subscriptionId: primary.id }
-  }
-
-  if ((primary.classesRemaining ?? 0) > 0) {
-    return { ok: true, subscriptionId: primary.id }
-  }
-
-  return {
-    ok: false,
-    message: "Ya usaste las clases de tu paquete actual.",
-    reason: "no_classes",
-    subscriptionId: primary.id,
-  }
+  return { ok: true, subscriptionId: primary.id, warning }
 }
 
 export async function createBookingForUser(
@@ -194,6 +260,12 @@ export async function createBookingForUser(
     birthdate?: string | null
     /** Exige plan vigente con clases. Por defecto se permite reservar y cobrar después. */
     requirePlan?: boolean
+    /**
+     * Corta la reserva cuando ya se usó el tope semanal del plan. Va en el
+     * camino de la alumna; el mostrador se queda sin él para poder resolver el
+     * caso a mano, que es a lo que la manda el mensaje.
+     */
+    enforceWeeklyLimit?: boolean
   },
 ): Promise<CreateBookingResult> {
   const [slot] = await db
@@ -266,8 +338,20 @@ export async function createBookingForUser(
 
   // El plan ya no es requisito para reservar: si no lo cubre, la clase se cobra
   // después y el estudio regulariza el pago.
-  const subCheck = await checkBookableSubscriptionForUser(db, params.userId)
+  const subCheck = await checkBookableSubscriptionForUser(
+    db,
+    params.userId,
+    params.bookingDate,
+  )
   const subscriptionId = subCheck.ok ? subCheck.subscriptionId : null
+
+  if (
+    !subCheck.ok &&
+    subCheck.reason === "weekly_limit" &&
+    params.enforceWeeklyLimit === true
+  ) {
+    return { ok: false, message: subCheck.message }
+  }
 
   if (subscriptionId == null && params.requirePlan === true) {
     return { ok: false, message: subCheck.ok ? "" : subCheck.message }
@@ -297,7 +381,277 @@ export async function createBookingForUser(
     bookingId,
     userName: user?.name ?? "Usuario",
     coveredByPlan: subscriptionId != null,
+    planWarning: subCheck.ok ? subCheck.warning : undefined,
   }
+}
+
+export type ChangeBookingSlotResult =
+  | { ok: true; fromStartTime: string; toStartTime: string; className: string }
+  | { ok: false; message: string }
+
+/**
+ * Mueve una reserva a otro horario del mismo día.
+ *
+ * Es un UPDATE del `scheduleSlotId`, no un cancelar-y-reservar: la clase ya
+ * está consumida del plan y el día no cambia, así que mover el lugar no altera
+ * el cupo del plan, ni el tope semanal, ni el adeudo que la reserva pudiera
+ * tener colgando. Cancelar y recrear haría los tres movimientos para acabar en
+ * el mismo sitio, con el riesgo de quedarse a medias si el segundo paso falla.
+ */
+export async function changeBookingSlotForUser(
+  db: AnyDb,
+  params: {
+    userId: string
+    bookingId: string
+    toScheduleSlotId: string
+    birthdate?: string | null
+  },
+): Promise<ChangeBookingSlotResult> {
+  const [current] = await db
+    .select({
+      id: schema.booking.id,
+      userId: schema.booking.userId,
+      status: schema.booking.status,
+      bookingDate: schema.booking.bookingDate,
+      slotId: schema.booking.scheduleSlotId,
+      startTime: schema.scheduleSlot.startTime,
+      takenAt: schema.booking.takenAt,
+    })
+    .from(schema.booking)
+    .innerJoin(schema.scheduleSlot, eq(schema.booking.scheduleSlotId, schema.scheduleSlot.id))
+    .where(eq(schema.booking.id, params.bookingId))
+    .limit(1)
+
+  if (current == null) return { ok: false, message: "Reserva no encontrada" }
+  if (current.userId !== params.userId) {
+    return { ok: false, message: "No puedes mover la reserva de otra persona" }
+  }
+  if (current.status !== "confirmed") {
+    return { ok: false, message: "Esta reserva ya no está confirmada" }
+  }
+  if (current.slotId === params.toScheduleSlotId) {
+    return { ok: false, message: "Esa ya es la hora de tu reserva" }
+  }
+  if (current.takenAt != null) {
+    return { ok: false, message: "Ya marcaste esta clase como tomada; no se puede cambiar" }
+  }
+
+  const bookingDate =
+    current.bookingDate instanceof Date
+      ? current.bookingDate
+      : new Date(current.bookingDate as unknown as number)
+
+  const [target] = await db
+    .select({
+      id: schema.scheduleSlot.id,
+      dayOfWeek: schema.scheduleSlot.dayOfWeek,
+      startTime: schema.scheduleSlot.startTime,
+      endTime: schema.scheduleSlot.endTime,
+      className: schema.scheduleSlot.className,
+      classType: schema.scheduleSlot.classType,
+      isActive: schema.scheduleSlot.isActive,
+      capacity: schema.scheduleSlot.capacity,
+    })
+    .from(schema.scheduleSlot)
+    .where(eq(schema.scheduleSlot.id, params.toScheduleSlotId))
+    .limit(1)
+
+  if (target == null || !target.isActive) {
+    return { ok: false, message: "Horario no disponible" }
+  }
+  if (target.dayOfWeek !== bookingDate.getDay()) {
+    return { ok: false, message: "Sólo puedes cambiar a otro horario del mismo día" }
+  }
+
+  if (await isSlotDisabledOnDate(db, target.id, bookingDate)) {
+    return { ok: false, message: "Esta clase no se imparte esa semana." }
+  }
+
+  const ageCheck = validateBookingAgeForSlot(
+    params.birthdate,
+    target.dayOfWeek,
+    target.startTime,
+    bookingDate,
+    target.classType,
+  )
+  if (!ageCheck.ok) return { ok: false, message: ageCheck.message }
+
+  if (await userHasBookingForSlot(db, params.userId, target.id, bookingDate)) {
+    return { ok: false, message: "Ya tienes una reserva confirmada en ese horario" }
+  }
+
+  const confirmed = await countConfirmedBookingsForSlotOnDate(db, target.id, bookingDate)
+  if (confirmed >= target.capacity) {
+    return { ok: false, message: "Esta clase ya está llena. No hay lugares disponibles." }
+  }
+
+  const policy = await loadStudioCancellationPolicy(db)
+  const now = new Date()
+
+  // La clase a la que se muda tiene que seguir siendo reservable...
+  const targetEnd = classEndFromBooking(bookingDate, target.startTime, target.endTime)
+  const targetCheck = evaluateBookingAllowed(now, targetEnd, policy)
+  if (!targetCheck.ok) return { ok: false, message: targetCheck.message }
+
+  // ...y la que deja tiene que seguir dentro de la ventana para soltarse. Se
+  // salta la regla de "sólo semanas futuras" a propósito: cambiar de hora no
+  // libera un lugar neto, sólo lo mueve dentro del mismo día.
+  const currentStart = classStartFromBooking(bookingDate, current.startTime)
+  const releaseCheck = evaluateCancellation(now, currentStart, policy)
+  if (!releaseCheck.ok) return { ok: false, message: releaseCheck.message }
+
+  await db
+    .update(schema.booking)
+    .set({ scheduleSlotId: target.id })
+    .where(eq(schema.booking.id, params.bookingId))
+
+  return {
+    ok: true,
+    fromStartTime: current.startTime,
+    toStartTime: target.startTime,
+    className: target.className,
+  }
+}
+
+/** La reserva confirmada de la alumna en ese horario y fecha, si existe. */
+export async function findBookingForSlotOnDate(
+  db: AnyDb,
+  userId: string,
+  scheduleSlotId: string,
+  bookingDate: Date,
+): Promise<{
+  id: string
+  startTime: string
+  className: string
+  takenAt: Date | null
+} | null> {
+  const { start, end } = dateRangeForDay(toLocalDateStr(bookingDate))
+  const [row] = await db
+    .select({
+      id: schema.booking.id,
+      startTime: schema.scheduleSlot.startTime,
+      className: schema.scheduleSlot.className,
+      takenAt: schema.booking.takenAt,
+    })
+    .from(schema.booking)
+    .innerJoin(schema.scheduleSlot, eq(schema.booking.scheduleSlotId, schema.scheduleSlot.id))
+    .where(
+      and(
+        eq(schema.booking.userId, userId),
+        eq(schema.booking.scheduleSlotId, scheduleSlotId),
+        eq(schema.booking.status, "confirmed"),
+        gte(schema.booking.bookingDate, start),
+        lte(schema.booking.bookingDate, end),
+      ),
+    )
+    .limit(1)
+  if (row == null) return null
+  return {
+    ...row,
+    takenAt:
+      row.takenAt == null
+        ? null
+        : row.takenAt instanceof Date
+          ? row.takenAt
+          : new Date(row.takenAt as unknown as number),
+  }
+}
+
+/** Reserva pendiente de tomar que aún puede cambiarse de horario ese día. */
+export async function findBookingOnDate(
+  db: AnyDb,
+  userId: string,
+  bookingDate: Date,
+): Promise<{ id: string; slotId: string; startTime: string; className: string } | null> {
+  const { start, end } = dateRangeForDay(toLocalDateStr(bookingDate))
+  const rows = await db
+    .select({
+      id: schema.booking.id,
+      slotId: schema.booking.scheduleSlotId,
+      startTime: schema.scheduleSlot.startTime,
+      className: schema.scheduleSlot.className,
+    })
+    .from(schema.booking)
+    .innerJoin(schema.scheduleSlot, eq(schema.booking.scheduleSlotId, schema.scheduleSlot.id))
+    .where(
+      and(
+        eq(schema.booking.userId, userId),
+        eq(schema.booking.status, "confirmed"),
+        isNull(schema.booking.takenAt),
+        gte(schema.booking.bookingDate, start),
+        lte(schema.booking.bookingDate, end),
+      ),
+    )
+    .orderBy(asc(schema.scheduleSlot.startTime))
+  return rows[0] ?? null
+}
+
+export type MarkTakenResult =
+  | { ok: true; className: string; startTime: string }
+  | { ok: false; message: string }
+
+/**
+ * La alumna marca su clase como tomada desde el calendario. Es su propio
+ * registro: NO toca `attended`, que sigue siendo la asistencia que confirma el
+ * coach y la que leen Reportes e Histórico.
+ *
+ * Sólo se puede desde que la clase empieza; marcar una que aún no ocurre
+ * dejaría un registro falso y bloquearía el cambio de hora sin motivo.
+ */
+export async function markBookingTakenForUser(
+  db: AnyDb,
+  params: { userId: string; bookingId: string; now?: Date },
+): Promise<MarkTakenResult> {
+  const [row] = await db
+    .select({
+      id: schema.booking.id,
+      userId: schema.booking.userId,
+      status: schema.booking.status,
+      bookingDate: schema.booking.bookingDate,
+      takenAt: schema.booking.takenAt,
+      startTime: schema.scheduleSlot.startTime,
+      className: schema.scheduleSlot.className,
+    })
+    .from(schema.booking)
+    .innerJoin(schema.scheduleSlot, eq(schema.booking.scheduleSlotId, schema.scheduleSlot.id))
+    .where(eq(schema.booking.id, params.bookingId))
+    .limit(1)
+
+  if (row == null) return { ok: false, message: "Reserva no encontrada" }
+  if (row.userId !== params.userId) {
+    return { ok: false, message: "No puedes marcar la reserva de otra persona" }
+  }
+  if (row.status !== "confirmed") {
+    return { ok: false, message: "Esta reserva ya no está confirmada" }
+  }
+  if (row.takenAt != null) {
+    return { ok: false, message: "Esta clase ya está marcada como tomada" }
+  }
+
+  const bookingDate =
+    row.bookingDate instanceof Date
+      ? row.bookingDate
+      : new Date(row.bookingDate as unknown as number)
+  const now = params.now ?? new Date()
+  if (now < classStartFromBooking(bookingDate, row.startTime)) {
+    return { ok: false, message: "Podrás marcarla cuando empiece la clase" }
+  }
+
+  await db
+    .update(schema.booking)
+    .set({ takenAt: now })
+    .where(eq(schema.booking.id, params.bookingId))
+
+  return { ok: true, className: row.className, startTime: row.startTime }
+}
+
+/** Desde cuándo se puede marcar como tomada: la hora de inicio de la clase. */
+export function canMarkTakenNow(
+  bookingDate: Date,
+  startTime: string,
+  now: Date = new Date(),
+): boolean {
+  return now >= classStartFromBooking(bookingDate, startTime)
 }
 
 export type CancelBookingResult =
@@ -322,6 +676,7 @@ export async function cancelBookingById(
       status: schema.booking.status,
       bookingDate: schema.booking.bookingDate,
       startTime: schema.scheduleSlot.startTime,
+      takenAt: schema.booking.takenAt,
     })
     .from(schema.booking)
     .innerJoin(schema.scheduleSlot, eq(schema.booking.scheduleSlotId, schema.scheduleSlot.id))
@@ -334,6 +689,10 @@ export async function cancelBookingById(
 
   if (booking.status !== "confirmed") {
     return { ok: false, message: "Esta reserva ya no está confirmada" }
+  }
+
+  if (booking.takenAt != null) {
+    return { ok: false, message: "Ya marcaste esta clase como tomada; no se puede liberar" }
   }
 
   if (options?.asAlumnoUserId != null && booking.userId !== options.asAlumnoUserId) {

@@ -12,11 +12,7 @@ import { Navbar } from "@/components/features/admin/navbar"
 import { DashboardProviders } from "@/components/features/admin/dashboard-providers"
 import { auth } from "@/lib/auth"
 import { loadNavPermissions } from "@/lib/nav-permissions.server"
-import {
-  canAccessDashboardPath,
-  getFirstAllowedDashboardUrl,
-  hasNoNavAccess,
-} from "@/lib/nav-permissions"
+import { canAccessDashboardPath, hasNoNavAccess } from "@/lib/nav-permissions"
 import { routes } from "@/lib/routes"
 import { NoAccessPanel } from "@/components/features/admin/no-access-panel"
 import { getDb } from "@/lib/db"
@@ -76,16 +72,18 @@ export default async function DashboardLayout({
   const noNavAccess = hasNoNavAccess(role, navPermissions)
 
   const pathname = headersList.get("x-dashboard-pathname") ?? routes.dashboard
-  let blockedByPermissions = false
-  if (!noNavAccess && !canAccessDashboardPath(role, pathname, navPermissions)) {
-    const landing = getFirstAllowedDashboardUrl(role, navPermissions)
-    // Guard anti-loop: si el destino tampoco pasa el permiso, o es la ruta en la
-    // que ya estamos, redirigir sólo encadena 307 hasta que el navegador corta.
-    if (landing !== pathname && canAccessDashboardPath(role, landing, navPermissions)) {
-      redirect(landing)
-    }
-    blockedByPermissions = true
-  }
+
+  // Aquí NO se redirige. Un `redirect()` desde un layout compartido rompe la
+  // navegación suave: el router pide el árbol de /dashboard, recibe la
+  // redirección, vuelve a pedir el destino y nunca se estabiliza -se midieron
+  // 825 peticiones RSC en 4 s contra la misma URL-, así que el usuario se queda
+  // con un Suspense vacío, o sea la pantalla en blanco. El reparto por rol de
+  // /dashboard lo hace su propia page, que sí puede redirigir sin romperlo.
+  const isDashboardRoot = pathname === routes.dashboard
+  const blockedByPermissions =
+    !noNavAccess &&
+    !isDashboardRoot &&
+    !canAccessDashboardPath(role, pathname, navPermissions)
 
   // Fetch welcomeShown + policy message only for alumnos — avoids unnecessary DB calls for staff
   let showWelcome = false

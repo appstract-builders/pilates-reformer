@@ -244,9 +244,10 @@ export default async function AlumnosPage({ searchParams }: { searchParams: Sear
 
   const tableRows: UsuarioTableRow[] = alumnos.map((alumno) => {
     const sub = subMap.get(alumno.id)
-    const isPackPlan = sub?.planType === "class_pack"
-    const isMonthly = sub?.planType === "monthly"
-    const remaining = isPackPlan ? (sub?.classesRemaining ?? 0) : null
+    // El mensual también lleva cuenta: su cupo son los días por semana por las
+    // semanas del periodo, no un acceso libre.
+    const remaining =
+      sub != null && sub.planType !== "add_on" ? (sub.classesRemaining ?? 0) : null
     const daysToEnd = sub ? calendarDaysUntilEnd(today, sub.endDate) : null
     const showExpiryAlert = daysToEnd !== null && daysToEnd === expiryDaysThreshold
     const birthdayToday = isBirthdayToday(alumno.birthdate)
@@ -268,7 +269,6 @@ export default async function AlumnosPage({ searchParams }: { searchParams: Sear
       planName: sub?.planName ?? null,
       planType: sub?.planType ?? null,
       classesRemaining: sub?.classesRemaining ?? null,
-      isMonthly,
       remaining,
       hasSubscription: sub != null,
       renewalLabel:

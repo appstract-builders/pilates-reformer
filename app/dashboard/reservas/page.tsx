@@ -101,9 +101,12 @@ export default async function ReservasPage({ searchParams }: { searchParams: Sea
         startDate,
         endDate,
       }
-      // El periodo puede seguir en `active` y ya estar vencido: la tarjeta sólo
-      // se pinta si de verdad está vigente hoy.
-      if (isSubscriptionCurrent(primary.status, endDate)) {
+      // Un periodo vencido con clases pagadas sin tomar sigue siendo útil: se
+      // muestra en ámbar para que sepa que las puede usar cuadrando con el
+      // estudio. Vencido y sin clases sí desaparece.
+      const vigente = isSubscriptionCurrent(primary.status, endDate)
+      const restantes = primary.isUnlimited === true ? null : (primary.classesRemaining ?? 0)
+      if (vigente || (restantes != null && restantes > 0)) {
         planVigente = {
           planName: primary.planName,
           planType: primary.planType,
@@ -111,6 +114,7 @@ export default async function ReservasPage({ searchParams }: { searchParams: Sea
           classesRemaining: primary.classesRemaining,
           isUnlimited: primary.isUnlimited === true,
           daysPerWeek: primary.daysPerWeek > 0 ? primary.daysPerWeek : null,
+          expired: !vigente,
         }
       }
     }
@@ -222,7 +226,7 @@ export default async function ReservasPage({ searchParams }: { searchParams: Sea
   }
 
   const description = isAlumno
-    ? `${totalItems} ${totalItems === 1 ? "reserva tuya" : "reservas tuyas"} en este día`
+    ? `${totalItems} ${totalItems === 1 ? "reserva" : "reservas"} en este día`
     : isCoach
       ? `${totalItems} reservas en este día`
       : alumnaFilter.length > 0

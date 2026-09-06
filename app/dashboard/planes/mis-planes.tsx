@@ -95,9 +95,7 @@ export function MisPlanes(props: { rows: MiPlanRow[]; pendingBalance: number }) 
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Clases restantes</span>
                     <span className="font-medium">
-                      {row.isUnlimited || row.planType === "monthly"
-                        ? "Sin límite"
-                        : (row.classesRemaining ?? 0)}
+                      {row.isUnlimited ? "Sin límite" : (row.classesRemaining ?? 0)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">

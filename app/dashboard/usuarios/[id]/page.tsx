@@ -119,8 +119,7 @@ export default async function AlumnoDetailPage(props: { params: Promise<{ id: st
       })[0] ?? null
 
   const remaining =
-    activeSub != null &&
-    (activeSub.planType === "class_pack")
+    activeSub != null && activeSub.planType !== "add_on"
       ? activeSub.classesRemaining ?? 0
       : null
 

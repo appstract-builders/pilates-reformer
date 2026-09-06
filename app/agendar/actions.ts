@@ -9,7 +9,12 @@ import { getDb } from "@/lib/db"
 import * as schema from "@/lib/db/schema"
 import {
   createBookingForUser,
-  userHasBookingForSlot,
+  findBookingOnDate,
+  findBookingForSlotOnDate,
+  changeBookingSlotForUser,
+  cancelBookingById,
+  markBookingTakenForUser,
+  canMarkTakenNow,
   checkBookableSubscriptionForUser,
   checkSlotCapacityForBooking,
 } from "@/lib/booking-service"
@@ -20,7 +25,7 @@ import {
   hasUsedTrialClass,
   notifyStaffChargeNotRegistered,
 } from "@/lib/class-charge"
-import { validateBookingAgeForSlot } from "@/lib/booking-rules"
+import { startOfStudioWeek, validateBookingAgeForSlot } from "@/lib/booking-rules"
 import {
   classEndFromBooking,
   evaluateBookingAllowed,
@@ -41,6 +46,8 @@ import {
   type SuggestedPlan,
 } from "@/lib/booking-plan-info"
 import { loadLandingScheduleBoard } from "@/lib/site/schedule-board.server"
+import { planWeeklyLimit } from "@/lib/plan-quota"
+import { isSubscriptionCurrent, pickPrimarySubscription } from "@/lib/subscription-display"
 import { getMondayOfWeek } from "@/lib/site/schedule"
 
 // El modal los consume desde este mismo módulo.
@@ -73,6 +80,9 @@ const publicBookingSchema = z.object({
   scheduleSlotId: z.string().min(1),
   bookingDate: z.string().min(1),
   useTrialClass: z.enum(["true", "false"]).optional(),
+  acceptIndividualClass: z.enum(["true", "false"]).optional(),
+  /** Mueve la clase que ya tiene ese día a este horario, en vez de agendar otra. */
+  changeSameDay: z.enum(["true", "false"]).optional(),
 })
 
 type SessionAlumna =
@@ -237,6 +247,143 @@ export async function loadWeeklyBoardAction() {
   return loadLandingScheduleBoard()
 }
 
+/**
+ * Lo que el tablero necesita saber de QUIEN mira: cuáles clases ya son suyas,
+ * qué plan la respalda y cuántas lleva de cada semana. Va aparte del tablero
+ * público para que la landing siga sirviéndose igual a quien no ha entrado.
+ */
+export type MyBookingContext = {
+  loggedIn: boolean
+  /** `slotId|YYYY-MM-DD` de mis reservas confirmadas. */
+  myBookingKeys: string[]
+  /** De las anteriores, las que ya marqué como tomadas: quedan quemadas. */
+  takenBookingKeys: string[]
+  /** Fechas donde ya tengo al menos una clase, para avisar del doble en un día. */
+  myBookingDates: string[]
+  /** Reservas mías por semana del estudio: lunes `YYYY-MM-DD` -> cuántas. */
+  weeklyUsage: Record<string, number>
+  plan: {
+    name: string
+    classesRemaining: number | null
+    isUnlimited: boolean
+    /** Tope de clases por semana del plan; null si no lo tiene. */
+    weeklyLimit: number | null
+    expired: boolean
+  } | null
+}
+
+const EMPTY_CONTEXT: MyBookingContext = {
+  loggedIn: false,
+  myBookingKeys: [],
+  takenBookingKeys: [],
+  myBookingDates: [],
+  weeklyUsage: {},
+  plan: null,
+}
+
+export async function loadMyBookingContextAction(): Promise<MyBookingContext> {
+  try {
+    const sessionAlumna = await getSessionAlumna()
+    if (!sessionAlumna.ok) return EMPTY_CONTEXT
+
+    const db = getDb()
+    const userId = sessionAlumna.alumna.id
+
+    const monday = getMondayOfWeek(new Date(), 0)
+    const rangeStart = new Date(monday)
+    rangeStart.setDate(rangeStart.getDate() - 7 * 12)
+    rangeStart.setHours(0, 0, 0, 0)
+    const rangeEnd = new Date(monday)
+    rangeEnd.setDate(rangeEnd.getDate() + 7 * 12 + 6)
+    rangeEnd.setHours(23, 59, 59, 999)
+
+    const rows = await db
+      .select({
+        slotId: schema.booking.scheduleSlotId,
+        bookingDate: schema.booking.bookingDate,
+        takenAt: schema.booking.takenAt,
+      })
+      .from(schema.booking)
+      .where(
+        and(
+          eq(schema.booking.userId, userId),
+          eq(schema.booking.status, "confirmed"),
+          gte(schema.booking.bookingDate, rangeStart),
+          lte(schema.booking.bookingDate, rangeEnd),
+        ),
+      )
+
+    const myBookingKeys: string[] = []
+    const takenBookingKeys: string[] = []
+    const dates = new Set<string>()
+    const weeklyUsage: Record<string, number> = {}
+    for (const row of rows) {
+      const date =
+        row.bookingDate instanceof Date
+          ? row.bookingDate
+          : new Date(row.bookingDate as unknown as number)
+      const dateStr = toLocalDateStr(date)
+      const key = `${row.slotId}|${dateStr}`
+      myBookingKeys.push(key)
+      if (row.takenAt != null) takenBookingKeys.push(key)
+      dates.add(dateStr)
+      const weekKey = toLocalDateStr(startOfStudioWeek(date))
+      weeklyUsage[weekKey] = (weeklyUsage[weekKey] ?? 0) + 1
+    }
+
+    const subs = await db
+      .select({
+        id: schema.subscription.id,
+        userId: schema.subscription.userId,
+        status: schema.subscription.status,
+        endDate: schema.subscription.endDate,
+        classesRemaining: schema.subscription.classesRemaining,
+        isUnlimited: schema.subscription.isUnlimited,
+        planName: schema.plan.name,
+        planType: schema.plan.planType,
+        daysPerWeek: schema.plan.daysPerWeek,
+      })
+      .from(schema.subscription)
+      .innerJoin(schema.plan, eq(schema.subscription.planId, schema.plan.id))
+      .where(
+        and(
+          eq(schema.subscription.userId, userId),
+          eq(schema.subscription.status, "active"),
+        ),
+      )
+
+    const primary = pickPrimarySubscription(subs)
+    const plan =
+      primary == null
+        ? null
+        : {
+            name: primary.planName,
+            classesRemaining:
+              primary.isUnlimited === true ? null : (primary.classesRemaining ?? 0),
+            isUnlimited: primary.isUnlimited === true,
+            weeklyLimit: planWeeklyLimit({
+              planType: primary.planType,
+              daysPerWeek: primary.daysPerWeek,
+              isUnlimited: primary.isUnlimited === true,
+            }),
+            expired: !isSubscriptionCurrent(primary.status, primary.endDate),
+          }
+
+    return {
+      loggedIn: true,
+      myBookingKeys,
+      takenBookingKeys,
+      myBookingDates: Array.from(dates),
+      weeklyUsage,
+      plan,
+    }
+  } catch {
+    // El tablero tiene que pintarse aunque esto falle: sin contexto se ve como
+    // para visitante, no roto.
+    return EMPTY_CONTEXT
+  }
+}
+
 export async function createPublicBookingAction(
   _prev: PublicBookingState,
   formData: FormData,
@@ -250,6 +397,8 @@ export async function createPublicBookingAction(
     scheduleSlotId: formData.get("scheduleSlotId"),
     bookingDate: formData.get("bookingDate"),
     useTrialClass: formData.get("useTrialClass") || undefined,
+    acceptIndividualClass: formData.get("acceptIndividualClass") || undefined,
+    changeSameDay: formData.get("changeSameDay") || undefined,
   })
   if (!parsed.success) {
     return { success: false, error: "Revisa la fecha y el horario" }
@@ -259,11 +408,45 @@ export async function createPublicBookingAction(
   const alumna = sessionAlumna.alumna
 
   const bookingDate = new Date(`${parsed.data.bookingDate}T12:00:00`)
+
+  // Cambio de hora: la reserva de ese día se muda de horario. No se cancela ni
+  // se crea otra, así que el plan, el tope semanal y el adeudo no se mueven.
+  if (parsed.data.changeSameDay === "true") {
+    const previous = await findBookingOnDate(db, alumna.id, bookingDate)
+    if (previous == null) {
+      return { success: false, error: "Ya no tienes una clase ese día para cambiar" }
+    }
+    const moved = await changeBookingSlotForUser(db, {
+      userId: alumna.id,
+      bookingId: previous.id,
+      toScheduleSlotId: parsed.data.scheduleSlotId,
+      birthdate: alumna.birthdate,
+    })
+    if (!moved.ok) {
+      return { success: false, error: moved.message }
+    }
+
+    revalidatePath("/dashboard/reservas")
+    revalidatePath("/dashboard/pagos")
+
+    return {
+      success: true,
+      message: `${alumna.name}, tu clase quedó confirmada.`,
+      bookedDate: parsed.data.bookingDate,
+    }
+  }
+
+  const acceptIndividualClass = parsed.data.acceptIndividualClass === "true"
+  if (acceptIndividualClass && (await getIndividualClassPlan(db)) == null) {
+    return { success: false, error: "No hay un precio de clase individual configurado. Contacta al estudio." }
+  }
+
   const result = await createBookingForUser(db, {
     userId: alumna.id,
     scheduleSlotId: parsed.data.scheduleSlotId,
     bookingDate,
     birthdate: alumna.birthdate,
+    enforceWeeklyLimit: !acceptIndividualClass,
   })
 
   if (!result.ok) {
@@ -285,7 +468,7 @@ export async function createPublicBookingAction(
       .limit(1)
 
     const className = slot?.className ?? "Clase"
-    const wantsTrial = parsed.data.useTrialClass === "true"
+    const wantsTrial = !acceptIndividualClass && parsed.data.useTrialClass === "true"
     const trial = wantsTrial
       ? await consumeTrialClass(db, {
           userId: alumna.id,
@@ -339,18 +522,91 @@ export async function createPublicBookingAction(
   }
 }
 
+/**
+ * Libera una reserva propia desde el calendario. Aplica la política del estudio
+ * igual que el panel: la ventana de cancelación y la regla de liberar sólo
+ * semanas futuras siguen mandando, y el mensaje explica cuándo no se puede.
+ */
+export async function cancelOwnBookingAction(
+  bookingId: string,
+): Promise<{ success: boolean; error?: string; message?: string }> {
+  const sessionAlumna = await getSessionAlumna()
+  if (!sessionAlumna.ok) {
+    return { success: false, error: sessionAlumna.error }
+  }
+
+  const id = bookingId.trim()
+  if (id === "") return { success: false, error: "Reserva no válida" }
+
+  const db = getDb()
+  const result = await cancelBookingById(db, id, {
+    asAlumnoUserId: sessionAlumna.alumna.id,
+  })
+  if (!result.ok) {
+    return { success: false, error: result.message }
+  }
+
+  revalidatePath("/dashboard/reservas")
+  revalidatePath("/dashboard/pagos")
+
+  return {
+    success: true,
+    message: result.restoredClass
+      ? "Liberaste tu lugar y la clase regresó a tu plan."
+      : "Liberaste tu lugar.",
+  }
+}
+
+/** La alumna da por tomada su clase. No toca la asistencia oficial del coach. */
+export async function markBookingTakenAction(
+  bookingId: string,
+): Promise<{ success: boolean; error?: string; message?: string }> {
+  const sessionAlumna = await getSessionAlumna()
+  if (!sessionAlumna.ok) {
+    return { success: false, error: sessionAlumna.error }
+  }
+
+  const id = bookingId.trim()
+  if (id === "") return { success: false, error: "Reserva no válida" }
+
+  const result = await markBookingTakenForUser(getDb(), {
+    userId: sessionAlumna.alumna.id,
+    bookingId: id,
+  })
+  if (!result.ok) return { success: false, error: result.message }
+
+  revalidatePath("/dashboard/reservas")
+  revalidatePath("/dashboard/historico")
+
+  return { success: true, message: "Marcaste esta clase como tomada." }
+}
+
 export type BookingEligibility = {
   ok: boolean
   message?: string
   alumnaName?: string
   /** Sin plan que la cubra: la clase se reserva igual y queda como adeudo. */
-  willBeCharged?: { priceMxn: number; planName: string }
+  willBeCharged?: { priceMxn: number; planName: string; weeklyLimitReached?: boolean }
   /** La cuenta aún no redime su clase muestra gratuita. */
   trialAvailable?: boolean
   /** Plan que va a cubrir la clase, para mostrar vigencia y clases restantes. */
   activePlan?: ActivePlanSummary
   /** Alternativas al cobro suelto cuando no hay plan vigente. */
   suggestedPlans?: SuggestedPlan[]
+  /** Aviso del plan: clases de un periodo vencido que hay que cuadrar. */
+  planWarning?: string
+  /** Clase que ya tiene ese día; elegir otra hora la mueve en vez de duplicarla. */
+  sameDayBooking?: { startTime: string; className: string }
+  /** La celda elegida es su propia reserva: liberarla, moverla o darla por tomada. */
+  ownBooking?: {
+    bookingId: string
+    startTime: string
+    className: string
+    /** Ya está quemada: no se mueve ni se libera. */
+    taken: boolean
+    /** La clase ya empezó, así que puede marcarla como tomada. */
+    canMarkTaken: boolean
+  }
 }
 
 export async function checkPublicBookingEligibility(
@@ -398,16 +654,27 @@ export async function checkPublicBookingEligibility(
     return { ok: false, message: check.message }
   }
 
-  const alreadyBooked = await userHasBookingForSlot(
+  // Si la celda es su propia reserva, el modal ofrece liberarla en vez de dar
+  // un mensaje sin salida.
+  const ownBooking = await findBookingForSlotOnDate(
     db,
     alumna.id,
     scheduleSlotId,
     bookingDate,
   )
-  if (alreadyBooked) {
+  if (ownBooking != null) {
     return {
       ok: false,
-      message: "Ya tienes una reserva confirmada para esa clase en esa fecha",
+      alumnaName: alumna.name,
+      ownBooking: {
+        bookingId: ownBooking.id,
+        startTime: ownBooking.startTime,
+        className: ownBooking.className,
+        taken: ownBooking.takenAt != null,
+        canMarkTaken:
+          ownBooking.takenAt == null &&
+          canMarkTakenNow(bookingDate, ownBooking.startTime),
+      },
     }
   }
 
@@ -423,9 +690,36 @@ export async function checkPublicBookingEligibility(
     return { ok: false, message: timingCheck.message }
   }
 
-  // Sin plan vigente también puede reservar: la clase se le carga a la cuenta
-  // y el estudio regulariza el pago.
-  const subCheck = await checkBookableSubscriptionForUser(db, alumna.id)
+  const previousSameDay = await findBookingOnDate(db, alumna.id, bookingDate)
+  const sameDayBooking =
+    previousSameDay == null
+      ? undefined
+      : { startTime: previousSameDay.startTime, className: previousSameDay.className }
+
+  // Mover una reserva conserva su cobertura; no ofrece muestra ni otro cobro,
+  // aunque el plan ya haya agotado sus clases al apartar la reserva original.
+  if (sameDayBooking != null) {
+    return { ok: true, alumnaName: alumna.name, sameDayBooking }
+  }
+
+  const subCheck = await checkBookableSubscriptionForUser(db, alumna.id, bookingDate)
+  if (!subCheck.ok && subCheck.reason === "weekly_limit") {
+    const individualPlan = await getIndividualClassPlan(db)
+    if (individualPlan == null) {
+      return { ok: false, message: "Alcanzaste el límite semanal de tu plan. Contacta al estudio para comprar una clase individual." }
+    }
+    return {
+      ok: true,
+      alumnaName: alumna.name,
+      willBeCharged: {
+        priceMxn: individualPlan.priceMxn,
+        planName: individualPlan.name,
+        weeklyLimitReached: true,
+      },
+      trialAvailable: false,
+    }
+  }
+
   if (!subCheck.ok) {
     const [plan, trialUsed, suggestedPlans] = await Promise.all([
       getIndividualClassPlan(db),
@@ -439,6 +733,7 @@ export async function checkPublicBookingEligibility(
         plan != null ? { priceMxn: plan.priceMxn, planName: plan.name } : undefined,
       trialAvailable: !trialUsed,
       suggestedPlans,
+      sameDayBooking,
     }
   }
 
@@ -446,5 +741,7 @@ export async function checkPublicBookingEligibility(
     ok: true,
     alumnaName: alumna.name,
     activePlan: await loadActivePlanSummary(db, subCheck.subscriptionId),
+    planWarning: subCheck.warning,
+    sameDayBooking,
   }
 }

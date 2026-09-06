@@ -97,12 +97,8 @@ export async function loadLandingScheduleBoard(): Promise<LandingScheduleBoard> 
       bookingWindowMinutes:
         policy?.bookingWindowMinutes ?? DEFAULT_BOOKING_WINDOW_MINUTES,
     }
-  } catch {
-    return {
-      slots: [],
-      enrollments: {},
-      disabledSlotDateKeys: [],
-      bookingWindowMinutes: DEFAULT_BOOKING_WINDOW_MINUTES,
-    }
+  } catch (error) {
+    console.error("[schedule-board] No se pudo consultar el cupo", error)
+    throw error
   }
 }

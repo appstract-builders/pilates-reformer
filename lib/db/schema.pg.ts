@@ -188,6 +188,12 @@ export const booking = pgTable(
     status: text("status").notNull().default("confirmed"),
     attended: boolean("attended"),
     countedAsAttended: boolean("counted_as_attended").notNull().default(false),
+    /**
+     * La alumna marcó "Tomar clase" desde el calendario. Es su propio registro,
+     * distinto de `attended`, que sigue siendo la asistencia oficial que
+     * confirma el coach y la que leen Reportes e Histórico.
+     */
+    takenAt: timestamp("taken_at", { precision: 3, mode: "date" }),
     cancelledAt: timestamp("cancelled_at", { precision: 3, mode: "date" }),
     notes: text("notes"),
     reformerNumber: integer("reformer_number"),

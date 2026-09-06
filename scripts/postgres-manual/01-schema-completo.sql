@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS "booking" (
 	"status" text DEFAULT 'confirmed' NOT NULL,
 	"attended" boolean,
 	"counted_as_attended" boolean DEFAULT false NOT NULL,
+	"taken_at" timestamp (3),
 	"cancelled_at" timestamp (3),
 	"notes" text,
 	"reformer_number" integer,

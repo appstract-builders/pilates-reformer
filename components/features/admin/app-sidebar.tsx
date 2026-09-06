@@ -86,6 +86,7 @@ export function AppSidebar({
         <DashboardBrand
           studioName={studioName}
           logoUrl={logoUrl}
+          href="/"
           className="mb-4 border-b border-border pb-4"
         />
         <div className="relative">

@@ -183,6 +183,12 @@ export const booking = sqliteTable(
     status: text("status").notNull().default("confirmed"),
     attended: integer("attended", { mode: "boolean" }),
     countedAsAttended: integer("counted_as_attended", { mode: "boolean" }).notNull().default(false),
+    /**
+     * La alumna marcó "Tomar clase" desde el calendario. Es su propio registro,
+     * distinto de `attended`, que sigue siendo la asistencia oficial que
+     * confirma el coach y la que leen Reportes e Histórico.
+     */
+    takenAt: integer("taken_at", { mode: "timestamp_ms" }),
     cancelledAt: integer("cancelled_at", { mode: "timestamp_ms" }),
     notes: text("notes"),
     reformerNumber: integer("reformer_number"),

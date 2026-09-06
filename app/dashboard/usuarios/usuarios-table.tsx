@@ -36,7 +36,6 @@ export type UsuarioTableRow = {
   planName: string | null
   planType: string | null
   classesRemaining: number | null
-  isMonthly: boolean
   remaining: number | null
   hasSubscription: boolean
   renewalLabel: string
@@ -185,8 +184,6 @@ export function UsuariosTable(props: {
                 <TableCell>
                   {!row.hasSubscription ? (
                     "—"
-                  ) : row.isMonthly ? (
-                    <span className="text-sm text-muted-foreground">Mensual</span>
                   ) : row.remaining !== null && row.remaining <= 2 ? (
                     <Badge variant="destructive">{row.remaining}</Badge>
                   ) : (

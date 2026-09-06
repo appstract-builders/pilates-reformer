@@ -11,6 +11,8 @@ export type ActivePlanSummary = {
   endDate: string
   /** Días completos que faltan; 0 es "vence hoy". */
   daysLeft: number
+  /** El periodo ya venció y sólo se están tomando las clases que sobraron. */
+  expired: boolean
   /** Días que abarca la vigencia completa, para dibujar la barra de avance. */
   totalDays: number
   classesRemaining: number | null
@@ -59,6 +61,7 @@ export async function loadActivePlanSummary(
     0,
     Math.floor((end.getTime() - startOfToday.getTime()) / 86_400_000),
   )
+  const expired = end.getTime() < Date.now()
 
   const start =
     row.startDate instanceof Date
@@ -69,14 +72,15 @@ export async function loadActivePlanSummary(
     Math.round((subscriptionEndOfDay(end).getTime() - start.getTime()) / 86_400_000),
   )
 
-  // Un plan mensual no lleva cuenta de clases: mostrarle "0 disponibles" sería
-  // mentirle a la alumna. Esos van por días por semana.
-  const countsClasses = row.planType !== "monthly" && row.isUnlimited !== true
+  // Todo plan con cupo lleva cuenta: el mensual también, porque su total sale
+  // de los días por semana por las semanas del periodo. Sólo el ilimitado no.
+  const countsClasses = row.isUnlimited !== true
 
   return {
     name: row.name,
     endDate: toLocalDateStr(end),
     daysLeft,
+    expired,
     totalDays,
     classesRemaining: countsClasses ? (row.classesRemaining ?? 0) : null,
     isUnlimited: row.isUnlimited === true,
