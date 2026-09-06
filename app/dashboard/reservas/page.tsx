@@ -7,7 +7,10 @@ import * as schema from "@/lib/db/schema"
 import { and, asc, count, eq, gte, lte } from "drizzle-orm"
 import { isAlumnoRole, getSessionUserId } from "@/lib/alumno-scope"
 import { evaluateStudentSelfRelease } from "@/lib/booking-rules"
-import { pickPrimarySubscription } from "@/lib/subscription-display"
+import {
+  isSubscriptionCurrent,
+  pickPrimarySubscription,
+} from "@/lib/subscription-display"
 import { ListPagination } from "@/components/features/admin/list-pagination"
 import { LIST_PAGE_SIZE, listPaginationOffset, parseListPage } from "@/lib/list-pagination"
 import { routes } from "@/lib/routes"
@@ -17,6 +20,7 @@ import { dateRangeForDay, localTodayStr } from "@/lib/booking-slot-options"
 import Link from "next/link"
 import { ReservaCard } from "./reserva-card"
 import { PendingPaymentsPanel, type PendingPaymentRow } from "./pending-payments-panel"
+import { PlanVigenteCard, type PlanVigenteRow } from "./plan-vigente-card"
 
 function isAdminOrRoot(role: string) {
   return role === "admin" || role === "root"
@@ -58,6 +62,7 @@ export default async function ReservasPage({ searchParams }: { searchParams: Sea
     startDate: Date
     endDate: Date
   } | null = null
+  let planVigente: PlanVigenteRow | null = null
 
   if (isAlumno && userId != null) {
     const subs = await db
@@ -67,8 +72,14 @@ export default async function ReservasPage({ searchParams }: { searchParams: Sea
         status: schema.subscription.status,
         startDate: schema.subscription.startDate,
         endDate: schema.subscription.endDate,
+        classesRemaining: schema.subscription.classesRemaining,
+        isUnlimited: schema.subscription.isUnlimited,
+        planName: schema.plan.name,
+        planType: schema.plan.planType,
+        daysPerWeek: schema.plan.daysPerWeek,
       })
       .from(schema.subscription)
+      .innerJoin(schema.plan, eq(schema.subscription.planId, schema.plan.id))
       .where(
         and(
           eq(schema.subscription.userId, userId),
@@ -77,16 +88,30 @@ export default async function ReservasPage({ searchParams }: { searchParams: Sea
       )
     const primary = pickPrimarySubscription(subs)
     if (primary != null) {
+      const startDate =
+        primary.startDate instanceof Date
+          ? primary.startDate
+          : new Date(primary.startDate as unknown as number)
+      const endDate =
+        primary.endDate instanceof Date
+          ? primary.endDate
+          : new Date(primary.endDate as unknown as number)
       alumnoSubscription = {
         status: primary.status,
-        startDate:
-          primary.startDate instanceof Date
-            ? primary.startDate
-            : new Date(primary.startDate as unknown as number),
-        endDate:
-          primary.endDate instanceof Date
-            ? primary.endDate
-            : new Date(primary.endDate as unknown as number),
+        startDate,
+        endDate,
+      }
+      // El periodo puede seguir en `active` y ya estar vencido: la tarjeta sólo
+      // se pinta si de verdad está vigente hoy.
+      if (isSubscriptionCurrent(primary.status, endDate)) {
+        planVigente = {
+          planName: primary.planName,
+          planType: primary.planType,
+          endDate,
+          classesRemaining: primary.classesRemaining,
+          isUnlimited: primary.isUnlimited === true,
+          daysPerWeek: primary.daysPerWeek > 0 ? primary.daysPerWeek : null,
+        }
       }
     }
   }
@@ -221,6 +246,8 @@ export default async function ReservasPage({ searchParams }: { searchParams: Sea
           </Button>
         ) : null}
       </PageHeader>
+
+      {isAlumno ? <PlanVigenteCard row={planVigente} /> : null}
 
       <PendingPaymentsPanel rows={pendingPayments} />
 

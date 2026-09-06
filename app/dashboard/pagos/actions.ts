@@ -79,6 +79,10 @@ export async function confirmPaymentAction(
   revalidatePath("/dashboard/pagos")
   revalidatePath("/dashboard/usuarios")
   revalidatePath(`/dashboard/usuarios/${row.userId}`)
+  // Confirmar el cobro es lo que la alumna ve como "ya tengo plan": sus dos
+  // vistas tienen que quedar frescas junto con las del admin.
+  revalidatePath("/dashboard/reservas")
+  revalidatePath("/dashboard/planes")
   return { success: true }
 }
 

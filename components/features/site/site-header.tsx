@@ -85,7 +85,9 @@ export function SiteHeader() {
             className="font-sans hidden gap-2 lg:inline-flex"
           >
             {isLoggedIn ? (
-              <Link href={routes.cuenta}>
+              // Sin prefetch: /dashboard redirige por rol, y el router se queda
+              // con esa redirección cacheada y no pinta el panel al entrar.
+              <Link href={routes.cuenta} prefetch={false}>
                 <UserRound className="size-4 shrink-0" aria-hidden />
                 Ver cuenta
               </Link>
@@ -137,7 +139,11 @@ export function SiteHeader() {
           <div className="border-border mt-6 border-t pt-6">
             <Button asChild variant="outline" className="font-sans w-full gap-2">
               {isLoggedIn ? (
-                <Link href={routes.cuenta} onClick={() => setMenuOpen(false)}>
+                <Link
+                  href={routes.cuenta}
+                  prefetch={false}
+                  onClick={() => setMenuOpen(false)}
+                >
                   <UserRound className="size-4 shrink-0" aria-hidden />
                   Ver cuenta
                 </Link>

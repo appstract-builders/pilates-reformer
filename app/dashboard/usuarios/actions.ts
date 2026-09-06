@@ -163,6 +163,10 @@ export async function createAlumnoAction(
 
     revalidatePath(routes.usuarios)
     revalidatePath("/dashboard/pagos")
+    // Las vistas de la alumna: si no se revalidan, su plan recien asignado no
+    // aparece hasta que recarga a mano.
+    revalidatePath(routes.reservas)
+    revalidatePath(routes.planes)
     return { success: true, displayId }
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Error de base de datos"
@@ -304,6 +308,8 @@ export async function updateAlumnoAction(
     revalidatePath(routes.usuarios)
     revalidatePath("/dashboard/pagos")
     revalidatePath(routes.usuarioDetail(parsed.data.id))
+    revalidatePath(routes.reservas)
+    revalidatePath(routes.planes)
     return { success: true }
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Error de base de datos"

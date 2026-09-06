@@ -25,7 +25,8 @@ import {
   TooltipTrigger,
 } from '@/components/shared/ui/tooltip'
 
-const SIDEBAR_STORAGE_KEY = 'pilates_sidebar_open'
+const SIDEBAR_COOKIE_NAME = 'pilates_sidebar_open'
+const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
 const SIDEBAR_WIDTH = '16rem'
 const SIDEBAR_WIDTH_MOBILE = '18rem'
 const SIDEBAR_WIDTH_ICON = '3rem'
@@ -52,30 +53,17 @@ function useSidebar() {
   return context
 }
 
-function readSidebarOpenFromStorage(defaultOpen: boolean): boolean {
-  if (typeof window === 'undefined') {
-    return defaultOpen
-  }
-  try {
-    const stored = window.localStorage.getItem(SIDEBAR_STORAGE_KEY)
-    if (stored === 'true') {
-      return true
-    }
-    if (stored === 'false') {
-      return false
-    }
-  } catch {
-    return defaultOpen
-  }
-  return defaultOpen
-}
-
-function writeSidebarOpenToStorage(open: boolean) {
-  if (typeof window === 'undefined') {
+/**
+ * El estado del sidebar vive en cookie, no en localStorage, porque el layout lo
+ * necesita en el servidor: con localStorage el primer render siempre salia con
+ * el valor por defecto y el sidebar brincaba despues de hidratar.
+ */
+function writeSidebarOpenToCookie(open: boolean) {
+  if (typeof document === 'undefined') {
     return
   }
   try {
-    window.localStorage.setItem(SIDEBAR_STORAGE_KEY, open ? 'true' : 'false')
+    document.cookie = `${SIDEBAR_COOKIE_NAME}=${open ? 'true' : 'false'}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}; samesite=lax`
   } catch {
     return
   }
@@ -109,18 +97,10 @@ function SidebarProvider({
       } else {
         _setOpen(openState)
       }
-      writeSidebarOpenToStorage(openState)
+      writeSidebarOpenToCookie(openState)
     },
     [setOpenProp, open],
   )
-
-  React.useLayoutEffect(() => {
-    if (openProp !== undefined) {
-      return
-    }
-    const stored = readSidebarOpenFromStorage(defaultOpen)
-    _setOpen(stored)
-  }, [defaultOpen, openProp])
 
   // Helper to toggle the sidebar.
   const toggleSidebar = React.useCallback(() => {
@@ -753,6 +733,7 @@ export {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
   SidebarProvider,
+  SIDEBAR_COOKIE_NAME,
   SidebarRail,
   SidebarSeparator,
   SidebarTrigger,

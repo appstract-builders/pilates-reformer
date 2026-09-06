@@ -1,8 +1,12 @@
 export const dynamic = "force-dynamic"
 
-import { headers } from "next/headers"
+import { cookies, headers } from "next/headers"
 import { redirect } from "next/navigation"
-import { SidebarProvider, SidebarInset } from "@/components/shared/ui/sidebar"
+import {
+  SidebarProvider,
+  SidebarInset,
+  SIDEBAR_COOKIE_NAME,
+} from "@/components/shared/ui/sidebar"
 import { AppSidebar } from "@/components/features/admin/app-sidebar"
 import { Navbar } from "@/components/features/admin/navbar"
 import { DashboardProviders } from "@/components/features/admin/dashboard-providers"
@@ -21,7 +25,6 @@ import { eq } from "drizzle-orm"
 import { WelcomeModal } from "./_welcome-modal"
 import { sendTodayBirthdayNotifications } from "@/lib/birthday-notifications"
 import { getStudioBranding } from "@/lib/studio-branding"
-import { DashboardReadyGate } from "@/components/features/admin/dashboard-ready-gate"
 
 export default async function DashboardLayout({
   children,
@@ -113,31 +116,34 @@ export default async function DashboardLayout({
     welcomeDisplayId = fromDb !== "" ? fromDb : sessionDisplayId
   }
 
+  // El sidebar se pinta ya con su estado real: si el valor llegara despues de
+  // hidratar, el panel brincaria en cada carga del dashboard.
+  const sidebarCookie = (await cookies()).get(SIDEBAR_COOKIE_NAME)?.value
+  const sidebarDefaultOpen = sidebarCookie !== "false"
+
   return (
-    <DashboardReadyGate>
-      <SidebarProvider>
-        <AppSidebar
-          role={role}
-          navPermissions={navPermissions}
-          studioName={studioBranding.studioName}
-          logoUrl={studioBranding.logoUrl}
+    <SidebarProvider defaultOpen={sidebarDefaultOpen}>
+      <AppSidebar
+        role={role}
+        navPermissions={navPermissions}
+        studioName={studioBranding.studioName}
+        logoUrl={studioBranding.logoUrl}
+      />
+      <DashboardProviders>
+        <SidebarInset className="min-w-0">
+          <Navbar userName={navName} userEmail={navEmail} role={role} />
+          <main className="flex-1 overflow-auto min-w-0">
+            {noNavAccess || blockedByPermissions ? <NoAccessPanel /> : children}
+          </main>
+        </SidebarInset>
+      </DashboardProviders>
+      {showWelcome && (
+        <WelcomeModal
+          template={welcomeTemplate}
+          userName={navName}
+          displayId={welcomeDisplayId}
         />
-        <DashboardProviders>
-          <SidebarInset className="min-w-0">
-            <Navbar userName={navName} userEmail={navEmail} role={role} />
-            <main className="flex-1 overflow-auto min-w-0">
-              {noNavAccess || blockedByPermissions ? <NoAccessPanel /> : children}
-            </main>
-          </SidebarInset>
-        </DashboardProviders>
-        {showWelcome && (
-          <WelcomeModal
-            template={welcomeTemplate}
-            userName={navName}
-            displayId={welcomeDisplayId}
-          />
-        )}
-      </SidebarProvider>
-    </DashboardReadyGate>
+      )}
+    </SidebarProvider>
   )
 }
