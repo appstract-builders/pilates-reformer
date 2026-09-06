@@ -90,7 +90,9 @@ CREATE TABLE IF NOT EXISTS "payment" (
 	"concept" text,
 	"collected_by" text,
 	"is_negative" boolean DEFAULT false NOT NULL,
-	"validated" boolean DEFAULT false NOT NULL,
+	"cancelled_at" timestamp (3),
+	"cancelled_by" text,
+	"cancel_reason" text,
 	"created_at" timestamp (3) DEFAULT now() NOT NULL
 );
 

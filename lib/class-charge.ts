@@ -196,7 +196,12 @@ export async function voidPendingChargeForBooking(
 ): Promise<{ voidedAmount: number }> {
   const rows = await db
     .update(schema.payment)
-    .set({ status: "cancelled" })
+    .set({
+      status: "cancelled",
+      cancelledAt: new Date(),
+      cancelledBy: "sistema",
+      cancelReason: "La reserva se canceló",
+    })
     .where(
       and(
         eq(schema.payment.bookingId, params.bookingId),

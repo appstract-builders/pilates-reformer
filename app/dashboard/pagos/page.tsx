@@ -5,12 +5,10 @@ import * as schema from "@/lib/db/schema"
 import { eq, desc, asc, sql, count } from "drizzle-orm"
 import { PageHeader } from "@/components/features/admin/page-header"
 import { Badge } from "@/components/shared/ui/badge"
-import { Button } from "@/components/shared/ui/button"
 import {
   Table, TableBody, TableCell, TableHead,
   TableHeader, TableRow,
 } from "@/components/shared/ui/table"
-import { Plus } from "lucide-react"
 import { ListPagination } from "@/components/features/admin/list-pagination"
 import { SortableTableHead } from "@/components/features/admin/sortable-table-head"
 import { LIST_PAGE_SIZE, listPaginationOffset, parseListPage } from "@/lib/list-pagination"
@@ -22,8 +20,8 @@ import {
   type ListSortDir,
 } from "@/lib/list-sort"
 import { routes } from "@/lib/routes"
+import { CancelPaymentButton } from "./cancel-payment-button"
 import { ConfirmPaymentButton } from "./confirm-payment-button"
-import { ValidatePaymentCheck } from "./validate-payment-check"
 
 function statusBadge(status: string) {
   if (status === "succeeded") return <Badge className="bg-green-100 text-green-700 border-green-200">Exitoso</Badge>
@@ -80,7 +78,9 @@ export default async function PagosPage({ searchParams }: { searchParams: Search
       method: schema.payment.method,
       status: schema.payment.status,
       concept: schema.payment.concept,
-      validated: schema.payment.validated,
+      subscriptionId: schema.payment.subscriptionId,
+      cancelledBy: schema.payment.cancelledBy,
+      cancelReason: schema.payment.cancelReason,
       createdAt: schema.payment.createdAt,
       userName: schema.user.name,
     })
@@ -99,12 +99,7 @@ export default async function PagosPage({ searchParams }: { searchParams: Search
       <PageHeader
         title="Pagos"
         description={`Total recaudado: ${totalFormatted}`}
-      >
-        <Button className="gap-2">
-          <Plus className="h-4 w-4" />
-          Registrar Pago
-        </Button>
-      </PageHeader>
+      />
 
       <div className="rounded-lg border bg-card">
         <Table>
@@ -181,7 +176,15 @@ export default async function PagosPage({ searchParams }: { searchParams: Search
                 return (
                   <TableRow key={p.id} className="border-b last:border-0">
                     <TableCell className="font-medium">{p.userName}</TableCell>
-                    <TableCell className="text-muted-foreground">{p.concept ?? "—"}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      <span>{p.concept ?? "—"}</span>
+                      {p.status === "cancelled" ? (
+                        <span className="block text-xs text-muted-foreground/80">
+                          Anulado{p.cancelledBy ? ` por ${p.cancelledBy}` : ""}
+                          {p.cancelReason ? ` · ${p.cancelReason}` : ""}
+                        </span>
+                      ) : null}
+                    </TableCell>
                     <TableCell>{amountLabel}</TableCell>
                     <TableCell className="text-muted-foreground capitalize">{p.method}</TableCell>
                     <TableCell>{statusBadge(p.status)}</TableCell>
@@ -190,15 +193,21 @@ export default async function PagosPage({ searchParams }: { searchParams: Search
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="inline-flex items-center justify-end gap-3">
-                        <ValidatePaymentCheck
-                          paymentId={p.id}
-                          validated={p.validated}
-                        />
                         {p.status === "pending" ? (
                           <ConfirmPaymentButton
                             paymentId={p.id}
                             userName={p.userName}
                             amountLabel={amountLabel}
+                          />
+                        ) : null}
+                        {p.status !== "cancelled" &&
+                        !(p.subscriptionId != null && p.status === "succeeded") ? (
+                          <CancelPaymentButton
+                            paymentId={p.id}
+                            userName={p.userName}
+                            amountLabel={amountLabel}
+                            collected={p.status === "succeeded"}
+                            isSubscription={p.subscriptionId != null}
                           />
                         ) : null}
                       </div>

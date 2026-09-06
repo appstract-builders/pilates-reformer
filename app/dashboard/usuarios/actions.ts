@@ -280,6 +280,7 @@ export async function updateAlumnoAction(
         planId,
         billingCycle: parsed.data.billingCycle ?? "mensual",
         startDate: planStart,
+        actor: session?.user?.name ?? session?.user?.id ?? "admin",
       })
       if (!planResult.ok) {
         return { success: false, error: planResult.error }

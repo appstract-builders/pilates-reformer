@@ -6,6 +6,9 @@ import {
   toSubscriptionLocalDate,
 } from "@/lib/subscription-dates"
 import { incrementCouponUsedCount, resolveCouponForPrice } from "@/lib/coupons"
+import { isSubscriptionCurrent, pickPrimarySubscription } from "@/lib/subscription-display"
+import { voidPendingPaymentsForSubscriptions } from "@/lib/payment-cancellation"
+import { createNotification } from "@/lib/notifications"
 
 export async function activateSubscriptionForUser(
   db: AnyDb,
@@ -106,16 +109,61 @@ export async function activateSubscriptionForUser(
   return { ok: true }
 }
 
-export async function cancelActiveSubscriptionsForUser(db: AnyDb, userId: string) {
-  await db
+/**
+ * Cierra las suscripciones activas de un usuario.
+ *
+ * `status` distingue las dos razones por las que se cierra una: `cancelled` es
+ * una baja de verdad (Reportes la cuenta como tal) y `expired` es el cierre
+ * administrativo de un periodo que ya venció al renovarlo.
+ *
+ * `voidPendingCharges` sólo va en la baja explícita: renovar o cambiar de plan
+ * no perdona lo que la alumna ya debía.
+ */
+export async function cancelActiveSubscriptionsForUser(
+  db: AnyDb,
+  userId: string,
+  options?: {
+    status?: "cancelled" | "expired"
+    voidPendingCharges?: boolean
+    actor?: string
+    reason?: string
+  },
+) {
+  const closed = await db
     .update(schema.subscription)
-    .set({ status: "cancelled", classesRemaining: 0 })
+    .set({ status: options?.status ?? "cancelled", classesRemaining: 0 })
     .where(
       and(
         eq(schema.subscription.userId, userId),
         eq(schema.subscription.status, "active"),
       ),
     )
+    .returning({ id: schema.subscription.id })
+
+  if (options?.voidPendingCharges === true && closed.length > 0) {
+    const voided = await voidPendingPaymentsForSubscriptions(db, {
+      subscriptionIds: closed.map((row) => row.id),
+      actor: options.actor ?? "sistema",
+      reason: options.reason ?? "El plan se dio de baja",
+    })
+
+    if (voided.voidedAmount > 0) {
+      const [user] = await db
+        .select({ name: schema.user.name })
+        .from(schema.user)
+        .where(eq(schema.user.id, userId))
+        .limit(1)
+
+      await createNotification(db, {
+        userId,
+        type: "payment_cancelled",
+        title: "Plan dado de baja",
+        body: `Hola ${user?.name ?? "Usuario"}, dimos de baja tu plan y su cobro pendiente de ${new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(voided.voidedAmount)}. Cuando quieras volver, aquí estamos.`,
+      })
+    }
+  }
+
+  return closed.map((row) => row.id)
 }
 
 export async function applyUserPlan(
@@ -125,14 +173,19 @@ export async function applyUserPlan(
     planId: string
     billingCycle?: string
     startDate?: Date
+    /** Queda registrado en el pago que se anula al dar de baja el plan. */
+    actor?: string
   },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const planId = params.planId.trim()
 
-  const [active] = await db
+  const activeSubs = await db
     .select({
       id: schema.subscription.id,
+      userId: schema.subscription.userId,
       planId: schema.subscription.planId,
+      status: schema.subscription.status,
+      endDate: schema.subscription.endDate,
     })
     .from(schema.subscription)
     .where(
@@ -141,20 +194,41 @@ export async function applyUserPlan(
         eq(schema.subscription.status, "active"),
       ),
     )
-    .limit(1)
+
+  const active = pickPrimarySubscription(activeSubs)
 
   if (planId === "") {
     if (active != null) {
-      await cancelActiveSubscriptionsForUser(db, params.userId)
+      // Baja explícita: es el único camino que borra lo que quedaba por cobrar.
+      await cancelActiveSubscriptionsForUser(db, params.userId, {
+        voidPendingCharges: true,
+        actor: params.actor ?? "sistema",
+        reason: "El plan se dio de baja",
+      })
     }
     return { ok: true }
   }
 
   if (active != null && active.planId === planId) {
-    return { ok: true }
+    // Mismo plan: si el periodo sigue corriendo no se toca nada, para que
+    // reasignarlo por error no duplique el cobro. Ya vencido, se renueva: el
+    // periodo nuevo dura lo que diga el plan (7, 15 o 30 días) y trae su propio
+    // cobro pendiente, que se suma a lo que la alumna ya debiera.
+    if (isSubscriptionCurrent(active.status, active.endDate)) {
+      return { ok: true }
+    }
+    await cancelActiveSubscriptionsForUser(db, params.userId, { status: "expired" })
+    // Una renovación arranca hoy a propósito: heredar la fecha del formulario
+    // podía abrir un periodo que nacía vencido y pedía renovarse otra vez.
+    return activateSubscriptionForUser(db, {
+      userId: params.userId,
+      planId,
+      billingCycle: params.billingCycle,
+    })
   }
 
   if (active != null) {
+    // Cambio de plan: se cierra el anterior, pero su adeudo sigue vivo.
     await cancelActiveSubscriptionsForUser(db, params.userId)
   }
 
